@@ -13,6 +13,7 @@
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 from numpy.linalg import inv
+
 from jsl.lds.kalman_filter import LDS, kalman_filter
 
 
@@ -75,6 +76,7 @@ def posterior_lreg(X, y, R, mu0, Sigma0):
 
     return mn_bayes, Sn_bayes_inv
 
+
 def main():
     n_obs = 21
     timesteps = jnp.arange(n_obs)
@@ -82,13 +84,36 @@ def main():
     X = jnp.c_[jnp.ones(n_obs), x]
     F = jnp.eye(2)
     mu0 = jnp.zeros(2)
-    Sigma0 = jnp.eye(2) * 10.
+    Sigma0 = jnp.eye(2) * 10.0
 
     Q, R = 0, 1
     Q, R = jnp.asarray([[Q]]), jnp.asarray([[R]])
     # Data from original matlab example
-    y = jnp.array([2.4865, -0.3033, -4.0531, -4.3359, -6.1742, -5.604, -3.5069, -2.3257, -4.6377,
-                   -0.2327, -1.9858, 1.0284, -2.264, -0.4508, 1.1672, 6.6524, 4.1452, 5.2677, 6.3403, 9.6264, 14.7842])
+    y = jnp.array(
+        [
+            2.4865,
+            -0.3033,
+            -4.0531,
+            -4.3359,
+            -6.1742,
+            -5.604,
+            -3.5069,
+            -2.3257,
+            -4.6377,
+            -0.2327,
+            -1.9858,
+            1.0284,
+            -2.264,
+            -0.4508,
+            1.1672,
+            6.6524,
+            4.1452,
+            5.2677,
+            6.3403,
+            9.6264,
+            14.7842,
+        ]
+    )
 
     # Online estimation
     mu_hist, Sigma_hist = kf_linreg(X, y, R, mu0, Sigma0, F, Q)
@@ -104,14 +129,26 @@ def main():
     dict_figures = {}
 
     fig, ax = plt.subplots()
-    ax.errorbar(timesteps, w0_hist, w0_err, fmt="-o", label="$w_0$", color="black", fillstyle="none")
+    ax.errorbar(
+        timesteps,
+        w0_hist,
+        w0_err,
+        fmt="-o",
+        label="$w_0$",
+        color="black",
+        fillstyle="none",
+    )
     ax.errorbar(timesteps, w1_hist, w1_err, fmt="-o", label="$w_1$", color="tab:red")
 
     ax.axhline(y=w0_post, c="black", label="$w_0$ batch")
     ax.axhline(y=w1_post, c="tab:red", linestyle="--", label="$w_1$ batch")
 
-    ax.fill_between(timesteps, w0_post - w0_std, w0_post + w0_std, color="black", alpha=0.4)
-    ax.fill_between(timesteps, w1_post - w1_std, w1_post + w1_std, color="tab:red", alpha=0.4)
+    ax.fill_between(
+        timesteps, w0_post - w0_std, w0_post + w0_std, color="black", alpha=0.4
+    )
+    ax.fill_between(
+        timesteps, w1_post - w1_std, w1_post + w1_std, color="tab:red", alpha=0.4
+    )
 
     plt.legend()
     ax.set_xlabel("time")
@@ -124,6 +161,7 @@ def main():
 
 if __name__ == "__main__":
     from jsl.demos.plot_utils import savefig
+
     plt.rcParams["axes.spines.right"] = False
     plt.rcParams["axes.spines.top"] = False
     dict_figures = main()

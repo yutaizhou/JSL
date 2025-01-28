@@ -1,28 +1,31 @@
 # The implementation of Baulm-Welch algorithm for Hidden Markov Models with discrete observations in a stateless way.
 # Author : Aleyna Kara(@karalleyna)
 
-import jax
-import numpy as np
-import jax.numpy as jnp
-import jsl.hmm.hmm_discrete_lib as hmm
-from scipy.special import softmax
-from jax import vmap
-from jax.ops import index_update, index
-from jax.random import PRNGKey
 from dataclasses import dataclass
+
+import jax
+import jax.numpy as jnp
+import numpy as np
+from jax import vmap
+from jax.ops import index, index_update
+from jax.random import PRNGKey
+from scipy.special import softmax
+
+import jsl.hmm.hmm_discrete_lib as hmm
+
 
 @dataclass
 class PriorsNumpy:
-   trans_pseudo_counts: np.array
-   obs_pseudo_counts: np.array
-   init_pseudo_counts: np.array
+    trans_pseudo_counts: np.array
+    obs_pseudo_counts: np.array
+    init_pseudo_counts: np.array
 
 
 @dataclass
 class PriorsJax:
-   trans_pseudo_counts: jnp.array
-   obs_pseudo_counts: jnp.array
-   init_pseudo_counts: jnp.array
+    trans_pseudo_counts: jnp.array
+    obs_pseudo_counts: jnp.array
+    init_pseudo_counts: jnp.array
 
 
 def init_random_params_numpy(sizes, random_state):
@@ -44,9 +47,11 @@ def init_random_params_numpy(sizes, random_state):
     """
     num_hidden, num_obs = sizes
     np.random.seed(random_state)
-    return hmm.HMMNumpy(softmax(np.random.randn(num_hidden, num_hidden), axis=1),
-                    softmax(np.random.randn(num_hidden, num_obs), axis=1),
-                    softmax(np.random.randn(num_hidden)))
+    return hmm.HMMNumpy(
+        softmax(np.random.randn(num_hidden, num_hidden), axis=1),
+        softmax(np.random.randn(num_hidden, num_obs), axis=1),
+        softmax(np.random.randn(num_hidden)),
+    )
 
 
 def init_random_params_jax(sizes, rng_key):
@@ -68,9 +73,12 @@ def init_random_params_jax(sizes, rng_key):
     """
     num_hidden, num_obs = sizes
     rng_key, rng_a, rng_b, rng_pi = jax.random.split(rng_key, 4)
-    return hmm.HMMJax(jax.nn.softmax(jax.random.normal(rng_a, (num_hidden, num_hidden)), axis=1),
-                  jax.nn.softmax(jax.random.normal(rng_b, (num_hidden, num_obs)), axis=1),
-                  jax.nn.softmax(jax.random.normal(rng_pi, (num_hidden,))))
+    return hmm.HMMJax(
+        jax.nn.softmax(jax.random.normal(rng_a, (num_hidden, num_hidden)), axis=1),
+        jax.nn.softmax(jax.random.normal(rng_b, (num_hidden, num_obs)), axis=1),
+        jax.nn.softmax(jax.random.normal(rng_pi, (num_hidden,))),
+    )
+
 
 def compute_expected_trans_counts_numpy(params, alpha, beta, obs, T):
     """
@@ -110,9 +118,10 @@ def compute_expected_trans_counts_numpy(params, alpha, beta, obs, T):
     for t in range(T - 1):
         ksi = alpha[t] * trans_mat.T * beta[t + 1] * obs_mat[:, obs[t + 1]]
         normalizer = ksi.sum()
-        ksi /= 1 if normalizer==0 else ksi.sum()
+        ksi /= 1 if normalizer == 0 else ksi.sum()
         AA += ksi.T
     return AA
+
 
 def compute_expected_trans_counts_jax(params, alpha, beta, observations):
     """
@@ -142,20 +151,27 @@ def compute_expected_trans_counts_jax(params, alpha, beta, observations):
     * array
         A matrix of shape (n_states, n_states) representing expected transition counts
     """
+
     def ksi_(trans_mat, obs_mat, alpha, beta, obs):
         return (alpha * trans_mat.T * beta * obs_mat[:, obs]).T
 
     def count_(trans_mat, obs_mat, alpha, beta, obs):
         # AA[,j,k] = sum_t p(z(t)=j, z(t+1)=k|obs)
-        AA = vmap(ksi_, in_axes=(None, None, 0, 0, 0))(trans_mat, obs_mat, alpha[:-1], beta[1:], obs[1:])
+        AA = vmap(ksi_, in_axes=(None, None, 0, 0, 0))(
+            trans_mat, obs_mat, alpha[:-1], beta[1:], obs[1:]
+        )
         return AA
 
     trans_mat, obs_mat, init_dist = params.trans_mat, params.obs_mat, params.init_dist
 
-    trans_counts = vmap(count_, in_axes=(None, None, 0, 0, 0))(trans_mat, obs_mat, alpha, beta, observations)
+    trans_counts = vmap(count_, in_axes=(None, None, 0, 0, 0))(
+        trans_mat, obs_mat, alpha, beta, observations
+    )
 
     trans_count_normalizer = jnp.sum(trans_counts, axis=[2, 3], keepdims=True)
-    trans_count_normalizer = jnp.where(trans_count_normalizer == 0, 1, trans_count_normalizer)
+    trans_count_normalizer = jnp.where(
+        trans_count_normalizer == 0, 1, trans_count_normalizer
+    )
 
     trans_counts = jnp.sum(trans_counts / trans_count_normalizer, axis=1)
     trans_counts = jnp.sum(trans_counts, axis=0)
@@ -195,6 +211,7 @@ def compute_expected_obs_counts_numpy(gamma, obs, T, n_states, n_obs):
         BB[:, o] += gamma[t]
     return BB
 
+
 def compute_expected_obs_counts_jax(gamma, obs, n_states, n_obs):
     """
     Computes the expected observation count for each observation o by summing the probability of being at any of the
@@ -218,6 +235,7 @@ def compute_expected_obs_counts_jax(gamma, obs, n_states, n_obs):
     * array
         A matrix of shape (n_states, n_obs) representing expected observation counts given observation sequence.
     """
+
     def scan_fn(BB, elems):
         o, g = elems
         BB = index_update(BB, index[:, o], BB[:, o] + g)
@@ -226,6 +244,7 @@ def compute_expected_obs_counts_jax(gamma, obs, n_states, n_obs):
     BB = jnp.zeros((n_states, n_obs))
     BB, _ = jax.lax.scan(scan_fn, BB, (obs, gamma))
     return BB
+
 
 def hmm_e_step_numpy(params, observations, valid_lengths):
     """
@@ -272,13 +291,20 @@ def hmm_e_step_numpy(params, observations, valid_lengths):
     loglikelihood = 0
 
     for obs, valid_len in zip(observations, valid_lengths):
-        alpha, beta, gamma, ll = hmm.hmm_forwards_backwards_numpy(params, obs, valid_len)
-        trans_counts = trans_counts + compute_expected_trans_counts_numpy(params, alpha, beta, obs, valid_len)
-        obs_counts = obs_counts + compute_expected_obs_counts_numpy(gamma, obs, valid_len, n_states, n_obs)
+        alpha, beta, gamma, ll = hmm.hmm_forwards_backwards_numpy(
+            params, obs, valid_len
+        )
+        trans_counts = trans_counts + compute_expected_trans_counts_numpy(
+            params, alpha, beta, obs, valid_len
+        )
+        obs_counts = obs_counts + compute_expected_obs_counts_numpy(
+            gamma, obs, valid_len, n_states, n_obs
+        )
         init_counts = init_counts + gamma[0]
         loglikelihood += ll
 
     return trans_counts, obs_counts, init_counts, loglikelihood
+
 
 def hmm_e_step_jax(params, observations, valid_lengths):
     """
@@ -316,16 +342,21 @@ def hmm_e_step_jax(params, observations, valid_lengths):
     trans_mat, obs_mat, init_dist = params.trans_mat, params.obs_mat, params.init_dist
     n_states, n_obs = obs_mat.shape
 
-    alpha, beta, gamma, ll = vmap(hmm.hmm_forwards_backwards_jax, in_axes=(None, 0, 0))(params, observations, valid_lengths)
+    alpha, beta, gamma, ll = vmap(hmm.hmm_forwards_backwards_jax, in_axes=(None, 0, 0))(
+        params, observations, valid_lengths
+    )
     trans_counts = compute_expected_trans_counts_jax(params, alpha, beta, observations)
 
-    obs_counts = vmap(compute_expected_obs_counts_jax, in_axes=(0, 0, None, None))(gamma, observations, n_states, n_obs)
+    obs_counts = vmap(compute_expected_obs_counts_jax, in_axes=(0, 0, None, None))(
+        gamma, observations, n_states, n_obs
+    )
     obs_counts = jnp.sum(obs_counts, axis=0)
 
     init_counts = jnp.sum(gamma[:, 0, :], axis=0)
     loglikelihood = jnp.sum(ll)
 
     return trans_counts, obs_counts, init_counts, loglikelihood
+
 
 def hmm_m_step_numpy(counts, priors=None):
     """
@@ -358,6 +389,7 @@ def hmm_m_step_numpy(counts, priors=None):
     pi = init_counts / init_counts.sum()
 
     return hmm.HMMNumpy(A, B, pi)
+
 
 def hmm_m_step_jax(counts, priors=None):
     """
@@ -394,8 +426,17 @@ def hmm_m_step_jax(counts, priors=None):
     pi = init_counts / init_counts.sum()
     return hmm.HMMJax(A, B, pi)
 
-def hmm_em_numpy(observations, valid_lengths, n_hidden=None, n_obs=None,
-                 init_params=None, priors=None, num_epochs=1, random_state=None):
+
+def hmm_em_numpy(
+    observations,
+    valid_lengths,
+    n_hidden=None,
+    n_obs=None,
+    init_params=None,
+    priors=None,
+    num_epochs=1,
+    random_state=None,
+):
     """
     Implements Baum–Welch algorithm which is used for finding its components, A, B and pi.
 
@@ -441,20 +482,33 @@ def hmm_em_numpy(observations, valid_lengths, n_hidden=None, n_obs=None,
         try:
             init_params = init_random_params_numpy([n_hidden, n_obs], random_state)
         except:
-            raise ValueError("n_hidden and n_obs should be specified when init_params was not given.")
+            raise ValueError(
+                "n_hidden and n_obs should be specified when init_params was not given."
+            )
 
     neg_loglikelihoods = []
     params = init_params
 
     for _ in range(num_epochs):
-        trans_counts, obs_counts, init_counts, ll = hmm_e_step_numpy(params, observations, valid_lengths)
+        trans_counts, obs_counts, init_counts, ll = hmm_e_step_numpy(
+            params, observations, valid_lengths
+        )
         neg_loglikelihoods.append(-ll)
         params = hmm_m_step_numpy([trans_counts, obs_counts, init_counts], priors)
 
     return params, neg_loglikelihoods
 
-def hmm_em_jax(observations, valid_lengths, n_hidden=None, n_obs=None,
-               init_params=None, priors=None, num_epochs=1, rng_key=None):
+
+def hmm_em_jax(
+    observations,
+    valid_lengths,
+    n_hidden=None,
+    n_obs=None,
+    init_params=None,
+    priors=None,
+    num_epochs=1,
+    rng_key=None,
+):
     """
     Implements Baum–Welch algorithm which is used for finding its components, A, B and pi.
 
@@ -499,12 +553,16 @@ def hmm_em_jax(observations, valid_lengths, n_hidden=None, n_obs=None,
         try:
             init_params = init_random_params_jax([n_hidden, n_obs], rng_key=rng_key)
         except:
-            raise ValueError("n_hidden and n_obs should be specified when init_params was not given.")
+            raise ValueError(
+                "n_hidden and n_obs should be specified when init_params was not given."
+            )
 
     epochs = jnp.arange(num_epochs)
 
     def train_step(params, epoch):
-        trans_counts, obs_counts, init_counts, ll = hmm_e_step_jax(params, observations, valid_lengths)
+        trans_counts, obs_counts, init_counts, ll = hmm_e_step_jax(
+            params, observations, valid_lengths
+        )
         params = hmm_m_step_jax([trans_counts, obs_counts, init_counts], priors)
         return params, -ll
 

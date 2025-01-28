@@ -5,29 +5,32 @@
 # Author: Gerardo Duran-Martin (@gerdm), Aleyna Kara (@karalleyna)
 
 
-import jax
-import numpy as np
-import jax.numpy as jnp
 from dataclasses import dataclass
-from numpy.random import seed
-from jax import lax, vmap, jit
-from jax.scipy.special import logit
 from functools import partial
 
-import superimport
 #!pip install flax
 import flax
+import jax
+import jax.numpy as jnp
+import numpy as np
+import superimport
+from jax import jit, lax, vmap
+from jax.scipy.special import logit
+from numpy.random import seed
 
-'''
+"""
 Hidden Markov Model class used in numpy implementations of inference algorithms.
-'''
+"""
+
+
 @dataclass
 class HMMNumpy:
-   trans_mat: np.array # A : (n_states, n_states)
-   obs_mat: np.array # B : (n_states, n_obs)
-   init_dist: np.array # pi : (n_states)
+    trans_mat: np.array  # A : (n_states, n_states)
+    obs_mat: np.array  # B : (n_states, n_obs)
+    init_dist: np.array  # pi : (n_states)
 
-'''
+
+"""
 Hidden Markov Model class used in jax implementations of inference algorithms.
 
 The functions of optimizers expect that the type of its parameters 
@@ -36,15 +39,18 @@ is pytree. So, they cannot work on a vanilla dataclass. To see more:
 
 Since the flax.dataclass is registered pytree beforehand, it facilitates to use
 jit, vmap and optimizers on the hidden markov model.
-'''
+"""
+
+
 @flax.struct.dataclass
 class HMMJax:
-   trans_mat: jnp.array # A : (n_states, n_states)
-   obs_mat: jnp.array # B : (n_states, n_obs)
-   init_dist: jnp.array # pi : (n_states)
+    trans_mat: jnp.array  # A : (n_states, n_states)
+    obs_mat: jnp.array  # B : (n_states, n_obs)
+    init_dist: jnp.array  # pi : (n_states)
+
 
 def normalize_numpy(u, axis=0, eps=1e-15):
-    '''
+    """
     Normalizes the values within the axis in a way that they sum up to 1.
 
     Parameters
@@ -61,14 +67,15 @@ def normalize_numpy(u, axis=0, eps=1e-15):
 
     * array(seq_len, n_hidden) :
         The values of the normalizer
-    '''
+    """
     u = np.where(u == 0, 0, np.where(u < eps, eps, u))
     c = u.sum(axis=axis)
     c = np.where(c == 0, 1, c)
     return u / c, c
 
+
 def normalize(u, axis=0, eps=1e-15):
-    '''
+    """
     Normalizes the values within the axis in a way that they sum up to 1.
 
     Parameters
@@ -85,14 +92,15 @@ def normalize(u, axis=0, eps=1e-15):
 
     * array(seq_len, n_hidden) :
         The values of the normalizer
-    '''
+    """
     u = jnp.where(u == 0, 0, jnp.where(u < eps, eps, u))
     c = u.sum(axis=axis)
     c = jnp.where(c == 0, 1, c)
     return u / c, c
 
+
 def hmm_sample_numpy(params, seq_len, random_state=0):
-    '''
+    """
     Samples an observation of given length according to the defined
     hidden markov model and gives the sequence of the hidden states
     as well as the observation.
@@ -115,7 +123,8 @@ def hmm_sample_numpy(params, seq_len, random_state=0):
 
     * array(seq_len,) :
         Observation sequence
-    '''
+    """
+
     def sample_one_step_(hist, a, p):
         x_t = np.random.choice(a=a, p=p)
         return np.append(hist, [x_t]), x_t
@@ -140,9 +149,10 @@ def hmm_sample_numpy(params, seq_len, random_state=0):
 
     return state_seq, obs_seq
 
+
 @partial(jit, static_argnums=(1,))
 def hmm_sample_jax(params, seq_len, rng_key):
-    '''
+    """
     Samples an observation of given length according to the defined
     hidden markov model and gives the sequence of the hidden states
     as well as the observation.
@@ -165,7 +175,7 @@ def hmm_sample_jax(params, seq_len, rng_key):
 
     * array(seq_len,) :
         Observation sequence
-    '''
+    """
     trans_mat, obs_mat, init_dist = params.trans_mat, params.obs_mat, params.init_dist
     n_states, n_obs = obs_mat.shape
 
@@ -181,7 +191,7 @@ def hmm_sample_jax(params, seq_len, rng_key):
     keys = jax.random.split(rng_state, seq_len - 1)
 
     final_state, states = jax.lax.scan(draw_state, initial_state, keys)
-    state_seq = jnp.append(jnp.array([initial_state]),states)
+    state_seq = jnp.append(jnp.array([initial_state]), states)
 
     def draw_obs(z, key):
         obs = jax.random.choice(key, a=obs_states, p=obs_mat[z])
@@ -192,8 +202,9 @@ def hmm_sample_jax(params, seq_len, rng_key):
 
     return state_seq, obs_seq
 
+
 def hmm_forwards_numpy(params, obs_seq, length):
-    '''
+    """
     Calculates a belief state
 
     Parameters
@@ -211,14 +222,13 @@ def hmm_forwards_numpy(params, obs_seq, length):
 
     * array(seq_len, n_hidden) :
         All alpha values found for each sample
-    '''
+    """
     trans_mat, obs_mat, init_dist = params.trans_mat, params.obs_mat, params.init_dist
     n_states, n_obs = obs_mat.shape
     seq_len = len(obs_seq)
 
     alpha_hist = np.zeros((seq_len, n_states))
     ll_hist = np.zeros(seq_len)  # loglikelihood history
-
 
     alpha_n = init_dist * obs_mat[:, obs_seq[0]]
     alpha_n, cn = normalize_numpy(alpha_n)
@@ -231,13 +241,16 @@ def hmm_forwards_numpy(params, obs_seq, length):
         alpha_n, cn = normalize_numpy(alpha_n)
 
         alpha_hist[t] = alpha_n
-        ll_hist[t] = np.log(cn) + ll_hist[t-1] # calculates the loglikelihood up to time t
+        ll_hist[t] = (
+            np.log(cn) + ll_hist[t - 1]
+        )  # calculates the loglikelihood up to time t
 
     return ll_hist[length - 1], alpha_hist
 
+
 @jit
 def hmm_forwards_jax(params, obs_seq, length=None):
-    '''
+    """
     Calculates a belief state
 
     Parameters
@@ -255,7 +268,7 @@ def hmm_forwards_jax(params, obs_seq, length=None):
 
     * array(seq_len, n_hidden) :
         All alpha values found for each sample
-    '''
+    """
     seq_len = len(obs_seq)
 
     if length is None:
@@ -266,9 +279,11 @@ def hmm_forwards_jax(params, obs_seq, length=None):
 
     def scan_fn(carry, t):
         (alpha_prev, log_ll_prev) = carry
-        alpha_n = jnp.where(t < length,
-                            obs_mat[:, obs_seq[t]] * (alpha_prev[:, None] * trans_mat).sum(axis=0),
-                            jnp.zeros_like(alpha_prev))
+        alpha_n = jnp.where(
+            t < length,
+            obs_mat[:, obs_seq[t]] * (alpha_prev[:, None] * trans_mat).sum(axis=0),
+            jnp.zeros_like(alpha_prev),
+        )
 
         alpha_n, cn = normalize(alpha_n)
         carry = (alpha_n, jnp.log(cn) + log_ll_prev)
@@ -288,8 +303,9 @@ def hmm_forwards_jax(params, obs_seq, length=None):
     (alpha_final, log_ll) = carry
     return log_ll, alpha_hist
 
+
 def hmm_loglikelihood_numpy(params, observations, lens):
-    '''
+    """
     Finds the loglikelihood of each observation sequence sequentially.
 
     Parameters
@@ -307,12 +323,18 @@ def hmm_loglikelihood_numpy(params, observations, lens):
     -------
     * array(N, seq_len)
         Consists of the loglikelihood of each observation sequence
-    '''
-    return np.array([hmm_forwards_numpy(params, obs, length)[0] for obs, length in zip(observations, lens)])
+    """
+    return np.array(
+        [
+            hmm_forwards_numpy(params, obs, length)[0]
+            for obs, length in zip(observations, lens)
+        ]
+    )
+
 
 @jit
 def hmm_loglikelihood_jax(params, observations, lens):
-    '''
+    """
     Finds the loglikelihood of each observation sequence parallel using vmap.
 
     Parameters
@@ -330,14 +352,16 @@ def hmm_loglikelihood_jax(params, observations, lens):
     -------
     * array(N, seq_len)
         Consists of the loglikelihood of each observation sequence
-    '''
+    """
+
     def forward_(params, x, length):
         return hmm_forwards_jax(params, x, length)[0]
 
     return vmap(forward_, in_axes=(None, 0, 0))(params, observations, lens)
 
+
 def hmm_backwards_numpy(params, obs_seq, length=None):
-    '''
+    """
     Computes the backwards probabilities
 
     Parameters
@@ -355,7 +379,7 @@ def hmm_backwards_numpy(params, obs_seq, length=None):
     -------
     * array(seq_len, n_states)
        Beta values
-    '''
+    """
     seq_len = len(obs_seq)
 
     if length is None:
@@ -370,14 +394,17 @@ def hmm_backwards_numpy(params, obs_seq, length=None):
     beta_hist[-1] = beta_next
 
     for t in range(2, length + 1):
-        beta_next, _ = normalize_numpy((beta_next * obs_mat[:, obs_seq[-t + 1]] * trans_mat).sum(axis=1))
+        beta_next, _ = normalize_numpy(
+            (beta_next * obs_mat[:, obs_seq[-t + 1]] * trans_mat).sum(axis=1)
+        )
         beta_hist[-t] = beta_next
 
     return beta_hist
 
+
 @jit
 def hmm_backwards_jax(params, obs_seq, length=None):
-    '''
+    """
     Computes the backwards probabilities
 
     Parameters
@@ -395,7 +422,7 @@ def hmm_backwards_jax(params, obs_seq, length=None):
     -------
     * array(seq_len, n_states)
        Beta values
-    '''
+    """
     seq_len = len(obs_seq)
 
     if length is None:
@@ -407,9 +434,13 @@ def hmm_backwards_jax(params, obs_seq, length=None):
     beta_t = jnp.ones((n_states,))
 
     def scan_fn(beta_prev, t):
-        beta_t = jnp.where(t > length,
-                           jnp.zeros_like(beta_prev),
-                           normalize((beta_prev * obs_mat[:, obs_seq[-t + 1]] * trans_mat).sum(axis=1))[0])
+        beta_t = jnp.where(
+            t > length,
+            jnp.zeros_like(beta_prev),
+            normalize(
+                (beta_prev * obs_mat[:, obs_seq[-t + 1]] * trans_mat).sum(axis=1)
+            )[0],
+        )
         return beta_t, beta_t
 
     ts = jnp.arange(2, seq_len + 1)
@@ -421,7 +452,7 @@ def hmm_backwards_jax(params, obs_seq, length=None):
 
 
 def hmm_forwards_backwards_numpy(params, obs_seq, length=None):
-    '''
+    """
     Computes, for each time step, the marginal conditional probability that the Hidden Markov Model was
     in each possible state given the observations that were made at each time step, i.e.
     P(z[i] | x[0], ..., x[num_steps - 1]) for all i from 0 to num_steps - 1
@@ -447,7 +478,7 @@ def hmm_forwards_backwards_numpy(params, obs_seq, length=None):
 
     * float
         The loglikelihood giving log(p(x|model))
-    '''
+    """
     seq_len = len(obs_seq)
     if length is None:
         length = seq_len
@@ -457,13 +488,14 @@ def hmm_forwards_backwards_numpy(params, obs_seq, length=None):
 
     gamma = alpha * np.roll(beta, -seq_len + length, axis=0)
     normalizer = gamma.sum(axis=1, keepdims=True)
-    gamma = gamma / np.where(normalizer==0, 1, normalizer)
+    gamma = gamma / np.where(normalizer == 0, 1, normalizer)
 
     return alpha, beta, gamma, ll
 
+
 @jit
 def hmm_forwards_backwards_jax(params, obs_seq, length=None):
-    '''
+    """
     Computes, for each time step, the marginal conditional probability that the Hidden Markov Model was
     in each possible state given the observations that were made at each time step, i.e.
     P(z[i] | x[0], ..., x[num_steps - 1]) for all i from 0 to num_steps - 1
@@ -489,14 +521,15 @@ def hmm_forwards_backwards_jax(params, obs_seq, length=None):
 
     * float
         The loglikelihood giving log(p(x|model))
-    '''
+    """
     seq_len = len(obs_seq)
     if length is None:
         length = seq_len
+
     def gamma_t(t):
-        gamma_t = jnp.where(t < length ,
-                            alpha[t]* beta[t-length],
-                            jnp.zeros((n_states,)))
+        gamma_t = jnp.where(
+            t < length, alpha[t] * beta[t - length], jnp.zeros((n_states,))
+        )
         return gamma_t
 
     ll, alpha = hmm_forwards_jax(params, obs_seq, length)
@@ -506,9 +539,10 @@ def hmm_forwards_backwards_jax(params, obs_seq, length=None):
 
     ts = jnp.arange(seq_len)
     gamma = vmap(gamma_t, (0))(ts)
-    #gamma = alpha * jnp.roll(beta, -seq_len + length, axis=0) #: Alternative
+    # gamma = alpha * jnp.roll(beta, -seq_len + length, axis=0) #: Alternative
     gamma = vmap(lambda x: normalize(x)[0])(gamma)
     return alpha, beta, gamma, ll
+
 
 def hmm_viterbi_numpy(params, obs_seq):
     """
@@ -543,6 +577,7 @@ def hmm_viterbi_numpy(params, obs_seq):
 
     return logp_hist.argmax(axis=1)
 
+
 @jit
 def hmm_viterbi_jax(params, obs_seq, length=None):
     """
@@ -576,9 +611,11 @@ def hmm_viterbi_jax(params, obs_seq, length=None):
     w0 = w0.max(axis=1)
 
     def forwards_backwards(w_prev, t):
-        wn = jnp.where(t < length,
-                       jnp.log(trans_mat) + jnp.log(obs_mat[:, obs_seq[t]]) + w_prev,
-                       -jnp.inf + jnp.zeros_like(w_prev))
+        wn = jnp.where(
+            t < length,
+            jnp.log(trans_mat) + jnp.log(obs_mat[:, obs_seq[t]]) + w_prev,
+            -jnp.inf + jnp.zeros_like(w_prev),
+        )
         wn = wn.max(axis=1)
 
         return wn, wn

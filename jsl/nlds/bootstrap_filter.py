@@ -4,22 +4,24 @@ Implementation of the Bootrstrap Filter for discrete time systems
 
 
 """
-import jax.numpy as jnp
-from jax import random, lax
 
 import chex
-
+import jax.numpy as jnp
+from jax import lax, random
 from jax.scipy import stats
+
 from jsl.nlds.base import NLDS
 
 
 # TODO: Extend to general case
-def filter(params: NLDS,
-           key: chex.PRNGKey,
-           init_state: chex.Array,
-           sample_obs: chex.Array,
-           nsamples: int = 2000,
-           Vinit: chex.Array = None):
+def filter(
+    params: NLDS,
+    key: chex.PRNGKey,
+    init_state: chex.Array,
+    sample_obs: chex.Array,
+    nsamples: int = 2000,
+    Vinit: chex.Array = None,
+):
     """
     init_state: array(state_size,)
         Initial state estimate
@@ -50,8 +52,7 @@ def filter(params: NLDS,
         weights_t = stats.multivariate_normal.pdf(obs_t, xt_rvs, R(zt_rvs, obs_t))
 
         # 3. Resampling
-        pi = random.choice(key_reindex, indices,
-                           p=weights_t, shape=(nsamples,))
+        pi = random.choice(key_reindex, indices, p=weights_t, shape=(nsamples,))
         zt_rvs = zt_rvs[pi, ...]
         weights_t = jnp.ones(nsamples) / nsamples
 

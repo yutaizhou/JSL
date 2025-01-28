@@ -4,21 +4,23 @@ dynamical system with discrete observations. Also known as the
 Node-decoupled Extended Kalman Filter (NDEKF)
 """
 
-import jax.numpy as jnp
-from jax import jacrev, lax
+from typing import Tuple
 
 import chex
-from typing import Tuple
+import jax.numpy as jnp
+from jax import jacrev, lax
 
 from .base import NLDS
 
 
-def filter(params: NLDS,
-           init_state: chex.Array,
-           sample_obs: chex.Array,
-           observations: Tuple = None,
-           Vinit: chex.Array = None,
-           return_history: bool = True):
+def filter(
+    params: NLDS,
+    init_state: chex.Array,
+    sample_obs: chex.Array,
+    observations: Tuple = None,
+    Vinit: chex.Array = None,
+    return_history: bool = True,
+):
     """
     Run the Extended Kalman Filter algorithm over a set of observed samples.
     Parameters
@@ -45,8 +47,7 @@ def filter(params: NLDS,
     observations = (observations,) if type(observations) is not tuple else observations
     xs = (sample_obs, observations)
 
-    def filter_step(state: Tuple[chex.Array, chex.Array],
-                    xs: Tuple[chex.Array, int]):
+    def filter_step(state: Tuple[chex.Array, chex.Array], xs: Tuple[chex.Array, int]):
         """
         Run the Extended Kalman filter algorithm for a single step
         Paramters

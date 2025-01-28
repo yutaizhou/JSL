@@ -5,19 +5,19 @@
 # This version is kept for historical purposes.
 # Author: Gerardo Duran-Martin (@gerdm), Aleyna Kara (@karalleyna), Kevin Murphy (@murphyk)
 
-from numpy.random import seed
-import numpy as np
-from scipy.special import softmax
 from dataclasses import dataclass
 
 import jax
+import numpy as np
 from jax.nn import softmax
+from numpy.random import seed
+from scipy.special import softmax
 
-
-
-'''
+"""
 Hidden Markov Model class used in numpy implementations of inference algorithms.
-'''
+"""
+
+
 @dataclass
 class HMMNumpy:
     trans_mat: np.array  # A : (n_states, n_states)
@@ -26,7 +26,7 @@ class HMMNumpy:
 
 
 def normalize_numpy(u, axis=0, eps=1e-15):
-    '''
+    """
     Normalizes the values within the axis in a way that they sum up to 1.
 
     Parameters
@@ -43,7 +43,7 @@ def normalize_numpy(u, axis=0, eps=1e-15):
 
     * array(seq_len, n_hidden) :
         The values of the normalizer
-    '''
+    """
     u = np.where(u == 0, 0, np.where(u < eps, eps, u))
     c = u.sum(axis=axis)
     c = np.where(c == 0, 1, c)
@@ -51,7 +51,7 @@ def normalize_numpy(u, axis=0, eps=1e-15):
 
 
 def hmm_sample_numpy(params, seq_len, random_state=0):
-    '''
+    """
     Samples an observation of given length according to the defined
     hidden markov model and gives the sequence of the hidden states
     as well as the observation.
@@ -74,7 +74,7 @@ def hmm_sample_numpy(params, seq_len, random_state=0):
 
     * array(seq_len,) :
         Observation sequence
-    '''
+    """
 
     def sample_one_step_(hist, a, p):
         x_t = np.random.choice(a=a, p=p)
@@ -104,8 +104,9 @@ def hmm_sample_numpy(params, seq_len, random_state=0):
 ##############################
 # Inference
 
+
 def hmm_forwards_numpy(params, obs_seq, length):
-    '''
+    """
     Calculates a belief state
 
     Parameters
@@ -123,7 +124,7 @@ def hmm_forwards_numpy(params, obs_seq, length):
 
     * array(seq_len, n_hidden) :
         All alpha values found for each sample
-    '''
+    """
     trans_mat, obs_mat, init_dist = params.trans_mat, params.obs_mat, params.init_dist
     n_states, n_obs = obs_mat.shape
     seq_len = len(obs_seq)
@@ -142,13 +143,15 @@ def hmm_forwards_numpy(params, obs_seq, length):
         alpha_n, cn = normalize_numpy(alpha_n)
 
         alpha_hist[t] = alpha_n
-        ll_hist[t] = np.log(cn) + ll_hist[t - 1]  # calculates the loglikelihood up to time t
+        ll_hist[t] = (
+            np.log(cn) + ll_hist[t - 1]
+        )  # calculates the loglikelihood up to time t
 
     return ll_hist[length - 1], alpha_hist
 
 
 def hmm_loglikelihood_numpy(params, observations, lens):
-    '''
+    """
     Finds the loglikelihood of each observation sequence sequentially.
 
     Parameters
@@ -166,12 +169,17 @@ def hmm_loglikelihood_numpy(params, observations, lens):
     -------
     * array(N, seq_len)
         Consists of the loglikelihood of each observation sequence
-    '''
-    return np.array([hmm_forwards_numpy(params, obs, length)[0] for obs, length in zip(observations, lens)])
+    """
+    return np.array(
+        [
+            hmm_forwards_numpy(params, obs, length)[0]
+            for obs, length in zip(observations, lens)
+        ]
+    )
 
 
 def hmm_backwards_numpy(params, obs_seq, length=None):
-    '''
+    """
     Computes the backwards probabilities
 
     Parameters
@@ -189,7 +197,7 @@ def hmm_backwards_numpy(params, obs_seq, length=None):
     -------
     * array(seq_len, n_states)
        Beta values
-    '''
+    """
     seq_len = len(obs_seq)
 
     if length is None:
@@ -204,14 +212,16 @@ def hmm_backwards_numpy(params, obs_seq, length=None):
     beta_hist[-1] = beta_next
 
     for t in range(2, length + 1):
-        beta_next, _ = normalize_numpy((beta_next * obs_mat[:, obs_seq[-t + 1]] * trans_mat).sum(axis=1))
+        beta_next, _ = normalize_numpy(
+            (beta_next * obs_mat[:, obs_seq[-t + 1]] * trans_mat).sum(axis=1)
+        )
         beta_hist[-t] = beta_next
 
     return beta_hist
 
 
 def hmm_forwards_backwards_numpy(params, obs_seq, length=None):
-    '''
+    """
     Computes, for each time step, the marginal conditional probability that the Hidden Markov Model was
     in each possible state given the observations that were made at each time step, i.e.
     P(z[i] | x[0], ..., x[num_steps - 1]) for all i from 0 to num_steps - 1
@@ -237,7 +247,7 @@ def hmm_forwards_backwards_numpy(params, obs_seq, length=None):
 
     * float
         The loglikelihood giving log(p(x|model))
-    '''
+    """
     seq_len = len(obs_seq)
     if length is None:
         length = seq_len
@@ -271,7 +281,11 @@ def hmm_viterbi_numpy(params, obs_seq):
     """
     seq_len = len(obs_seq)
 
-    trans_mat, obs_mat, init_dist = np.log(params.trans_mat), np.log(params.obs_mat), np.log(params.init_dist)
+    trans_mat, obs_mat, init_dist = (
+        np.log(params.trans_mat),
+        np.log(params.obs_mat),
+        np.log(params.init_dist),
+    )
 
     n_states, _ = obs_mat.shape
 
@@ -294,12 +308,14 @@ def hmm_viterbi_numpy(params, obs_seq):
     final_prob = prev_prob
     final_state = np.argmax(final_prob)
 
-    most_likely_initial_given_successor = np.argmax(
-        trans_mat + final_prob, axis=-2)
+    most_likely_initial_given_successor = np.argmax(trans_mat + final_prob, axis=-2)
 
-    most_likely_sources = np.vstack([
-        np.expand_dims(most_likely_initial_given_successor, axis=0),
-        np.array(most_likely_sources)])
+    most_likely_sources = np.vstack(
+        [
+            np.expand_dims(most_likely_initial_given_successor, axis=0),
+            np.array(most_likely_sources),
+        ]
+    )
 
     most_likely_path, state = [], final_state
 
@@ -314,6 +330,7 @@ def hmm_viterbi_numpy(params, obs_seq):
 
 ###############
 # Learning using EM (Baum Welch)
+
 
 @dataclass
 class PriorsNumpy:
@@ -341,9 +358,11 @@ def init_random_params_numpy(sizes, random_state):
     """
     num_hidden, num_obs = sizes
     np.random.seed(random_state)
-    return HMMNumpy(softmax(np.random.randn(num_hidden, num_hidden), axis=1),
-                    softmax(np.random.randn(num_hidden, num_obs), axis=1),
-                    softmax(np.random.randn(num_hidden)))
+    return HMMNumpy(
+        softmax(np.random.randn(num_hidden, num_hidden), axis=1),
+        softmax(np.random.randn(num_hidden, num_obs), axis=1),
+        softmax(np.random.randn(num_hidden)),
+    )
 
 
 def compute_expected_trans_counts_numpy(params, alpha, beta, obs, T):
@@ -468,8 +487,12 @@ def hmm_e_step_numpy(params, observations, valid_lengths):
 
     for obs, valid_len in zip(observations, valid_lengths):
         alpha, beta, gamma, ll = hmm_forwards_backwards_numpy(params, obs, valid_len)
-        trans_counts = trans_counts + compute_expected_trans_counts_numpy(params, alpha, beta, obs, valid_len)
-        obs_counts = obs_counts + compute_expected_obs_counts_numpy(gamma, obs, valid_len, n_states, n_obs)
+        trans_counts = trans_counts + compute_expected_trans_counts_numpy(
+            params, alpha, beta, obs, valid_len
+        )
+        obs_counts = obs_counts + compute_expected_obs_counts_numpy(
+            gamma, obs, valid_len, n_states, n_obs
+        )
         init_counts = init_counts + gamma[0]
         loglikelihood += ll
 
@@ -509,8 +532,16 @@ def hmm_m_step_numpy(counts, priors=None):
     return HMMNumpy(A, B, pi)
 
 
-def hmm_em_numpy(observations, valid_lengths, n_hidden=None, n_obs=None,
-                 init_params=None, priors=None, num_epochs=1, random_state=None):
+def hmm_em_numpy(
+    observations,
+    valid_lengths,
+    n_hidden=None,
+    n_obs=None,
+    init_params=None,
+    priors=None,
+    num_epochs=1,
+    random_state=None,
+):
     """
     Implements Baum–Welch algorithm which is used for finding its components, A, B and pi.
 
@@ -556,13 +587,17 @@ def hmm_em_numpy(observations, valid_lengths, n_hidden=None, n_obs=None,
         try:
             init_params = init_random_params_numpy([n_hidden, n_obs], random_state)
         except:
-            raise ValueError("n_hidden and n_obs should be specified when init_params was not given.")
+            raise ValueError(
+                "n_hidden and n_obs should be specified when init_params was not given."
+            )
 
     neg_loglikelihoods = []
     params = init_params
 
     for _ in range(num_epochs):
-        trans_counts, obs_counts, init_counts, ll = hmm_e_step_numpy(params, observations, valid_lengths)
+        trans_counts, obs_counts, init_counts, ll = hmm_e_step_numpy(
+            params, observations, valid_lengths
+        )
         neg_loglikelihoods.append(-ll)
         params = hmm_m_step_numpy([trans_counts, obs_counts, init_counts], priors)
 

@@ -5,19 +5,19 @@
 #   * https://github.com/rlabbe/Kalman-and-Bayesian-Filters-in-Python/blob/master/11-Extended-Kalman-Filters.ipynb
 #   * Nonlinear Dynamics and Chaos - Steven Strogatz
 
-from jsl.demos import plot_utils
-import numpy as np
-import matplotlib.pyplot as plt
 import jax.numpy as jnp
+import matplotlib.pyplot as plt
+import numpy as np
 from jax import random
 
+from jsl.demos import plot_utils
 from jsl.nlds.base import NLDS
 from jsl.nlds.continuous_extended_kalman_filter import estimate
 
 
 def fz(x):
     x, y = x
-    return jnp.asarray([y, x - x ** 3])
+    return jnp.asarray([y, x - x**3])
 
 
 def fx(x):

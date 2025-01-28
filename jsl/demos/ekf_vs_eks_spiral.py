@@ -2,8 +2,9 @@
 # on a nonlinear 2d tracking problem
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-import jsl.nlds.extended_kalman_smoother as eks
 from jax import random
+
+import jsl.nlds.extended_kalman_smoother as eks
 from jsl.demos import plot_utils
 from jsl.nlds.base import NLDS
 
@@ -25,8 +26,11 @@ def plot_inference(sample_obs, mean_hist, Sigma_hist, label):
     ax.plot(*mean_hist.T, c="tab:orange", label=label)
     ax.scatter(*mean_hist[0], c="black", zorder=3)
     plt.legend()
-    collection = [(mut, Vt) for mut, Vt in zip(mean_hist[::10], Sigma_hist[::10])
-                  if Vt[0, 0] > 0 and Vt[1, 1] > 0 and abs(Vt[1, 0] - Vt[0, 1]) < 7e-4]
+    collection = [
+        (mut, Vt)
+        for mut, Vt in zip(mean_hist[::10], Sigma_hist[::10])
+        if Vt[0, 0] > 0 and Vt[1, 1] > 0 and abs(Vt[1, 0] - Vt[0, 1]) < 7e-4
+    ]
     for mut, Vt in collection:
         plot_utils.plot_ellipse(Vt, mut, ax, plot_center=False, alpha=0.9, zorder=3)
         plt.scatter(*mut, c="black", zorder=3, s=5)
@@ -35,9 +39,11 @@ def plot_inference(sample_obs, mean_hist, Sigma_hist, label):
 
 
 def main():
-    def fz(x, dt): return x + dt * jnp.array([jnp.sin(x[1]), jnp.cos(x[0])])
+    def fz(x, dt):
+        return x + dt * jnp.array([jnp.sin(x[1]), jnp.cos(x[0])])
 
-    def fx(x, *args): return x
+    def fx(x, *args):
+        return x
 
     dt = 0.1
     nsteps = 300
@@ -55,8 +61,9 @@ def main():
     sample_state, sample_obs = model.sample(key, x0, nsteps)
 
     # _, ekf_hist = ekf_lib.filter(ekf_model, x0, sample_obs, return_params=["mean", "cov"])
-    hist = eks.smooth(model, x0, sample_obs, return_params=["mean", "cov"],
-                      return_filter_history=True)
+    hist = eks.smooth(
+        model, x0, sample_obs, return_params=["mean", "cov"], return_filter_history=True
+    )
     eks_hist = hist["smooth"]
     ekf_hist = hist["filter"]
 
@@ -72,14 +79,16 @@ def main():
     dict_figures["nlds2d_data"] = fig_data
 
     # nlds2d_ekf
-    fig_ekf, ax = plot_inference(sample_obs, ekf_mean_hist, ekf_Sigma_hist,
-                                 label="filtered")
+    fig_ekf, ax = plot_inference(
+        sample_obs, ekf_mean_hist, ekf_Sigma_hist, label="filtered"
+    )
     ax.set_title("EKF")
     dict_figures["nlds2d_ekf"] = fig_ekf
 
     # nlds2d_eks
-    fig_eks, ax = plot_inference(sample_obs, eks_mean_hist, eks_Sigma_hist,
-                                 label="smoothed")
+    fig_eks, ax = plot_inference(
+        sample_obs, eks_mean_hist, eks_Sigma_hist, label="smoothed"
+    )
     ax.set_title("EKS")
     dict_figures["nlds2d_eks"] = fig_eks
 

@@ -1,16 +1,18 @@
 # Jax implementation of a Linear Dynamical System
 # Author:  Gerardo Durán-Martín (@gerdm), Aleyna Kara(@karalleyna), Kevin Murphy (@murphyk)
 
-import chex
-import jax.numpy as jnp
-from jax.random import multivariate_normal, split
-from jax.scipy.linalg import solve
-from jax import tree_map, lax, vmap
 from dataclasses import dataclass, field
 from functools import partial
-from typing import Union, Callable
+from typing import Callable, Union
+
+import chex
+import jax.numpy as jnp
+from jax import lax, tree_map, vmap
+from jax.random import multivariate_normal, split
+from jax.scipy.linalg import solve
 
 ArrayOrFn = Union[chex.Array, Callable]
+
 
 @dataclass
 class LDS:
@@ -42,8 +44,9 @@ class LDS:
         Covariance of initial configuration. If value is set
         to zero, the initial state will be completely determined
         by mu0
-    
+
     """
+
     A: ArrayOrFn
     C: ArrayOrFn
     Q: ArrayOrFn
@@ -57,11 +60,10 @@ class LDS:
     nstates: int = field(init=False)
     nobs: int = field(init=False)
 
-
     def get_trans_mat_of(self, t: int):
         if callable(self.A):
             return self.A(t)
-        else:            
+        else:
             return self.A
 
     def get_obs_mat_of(self, t: int):
@@ -69,7 +71,7 @@ class LDS:
             return self.C(t)
         else:
             return self.C
-        
+
     def get_system_noise_of(self, t: int):
         if callable(self.Q):
             return self.Q(t)
@@ -84,7 +86,7 @@ class LDS:
 
     def get_state_offset_of(self, t: int):
         if self.state_offset is None:
-          return jnp.zeros((self.nstates))
+            return jnp.zeros((self.nstates))
         elif callable(self.state_offset):
             return self.state_offset(t)
         else:
@@ -99,14 +101,15 @@ class LDS:
             return self.obs_offset
 
     def __post_init__(self):
-            self.nobs, self.nstates = self.get_obs_mat_of(0).shape
+        self.nobs, self.nstates = self.get_obs_mat_of(0).shape
 
-
-    def sample(self,
-               key: chex.PRNGKey,
-               timesteps: int,
-               n_samples: int = 1,
-               sample_initial_state: bool = False):
+    def sample(
+        self,
+        key: chex.PRNGKey,
+        timesteps: int,
+        n_samples: int = 1,
+        sample_initial_state: bool = False,
+    ):
         """
         Simulate a run of n_sample independent stochastic
         linear dynamical systems
@@ -138,15 +141,18 @@ class LDS:
 
         # Generate all future noise terms
         zeros_state = jnp.zeros(state_size)
-        Q = self.get_system_noise_of(0) # assumed static
-        R = self.get_observation_noise_of(0) # assumed static
-  
+        Q = self.get_system_noise_of(0)  # assumed static
+        R = self.get_observation_noise_of(0)  # assumed static
 
         observation_size = timesteps if isinstance(R, int) else R.shape[0]
         zeros_obs = jnp.zeros(observation_size)
 
-        system_noise = multivariate_normal(key_system_noise, zeros_state, Q, (timesteps, n_samples))
-        obs_noise = multivariate_normal(key_obs_noise, zeros_obs, R, (timesteps, n_samples))
+        system_noise = multivariate_normal(
+            key_system_noise, zeros_state, Q, (timesteps, n_samples)
+        )
+        obs_noise = multivariate_normal(
+            key_obs_noise, zeros_obs, R, (timesteps, n_samples)
+        )
 
         # observation at time t=0
         obs_t = jnp.einsum("ij,sj->si", self.get_obs_mat_of(0), state_t) + obs_noise[0]
@@ -253,7 +259,7 @@ def kalman_update(mu_pred, Sigma_pred, obs, t, params):
 
 def kalman_step(state, obs, params):
     """
-    A single step of the Kalman filter to calculate mu_t, Sigma_t given estimates 
+    A single step of the Kalman filter to calculate mu_t, Sigma_t given estimates
      at previous time step and observation and system parameters at time t.
 
     Parameters
@@ -333,9 +339,7 @@ def kalman_filter(params: LDS, x_hist: chex.Array, return_history: bool = True):
     return mu_T, Sigma_T, None, None
 
 
-def filter(params: LDS,
-           x_hist: chex.Array,
-           return_history: bool = True):
+def filter(params: LDS, x_hist: chex.Array, return_history: bool = True):
     """
     Compute the online version of the Kalman-Filter, i.e,
     the one-step-ahead prediction for the hidden state or the
@@ -385,14 +389,16 @@ def smoother_step(state, elements, params):
     Jt = solve(Sigmat_cond_next, A @ Sigmatt, sym_pos=True).T
     mut_giv_T = mutt + Jt @ (mut_giv_T - mut_cond_next)
     Sigmat_giv_T = Sigmatt + Jt @ (Sigmat_giv_T - Sigmat_cond_next) @ Jt.T
-    return (mut_giv_T, Sigmat_giv_T,  t+1), (mut_giv_T, Sigmat_giv_T)
+    return (mut_giv_T, Sigmat_giv_T, t + 1), (mut_giv_T, Sigmat_giv_T)
 
 
-def kalman_smoother(params: LDS,
-                    mu_hist: chex.Array,
-                    Sigma_hist: chex.Array,
-                    mu_cond_hist: chex.Array,
-                    Sigma_cond_hist: chex.Array):
+def kalman_smoother(
+    params: LDS,
+    mu_hist: chex.Array,
+    Sigma_hist: chex.Array,
+    mu_cond_hist: chex.Array,
+    Sigma_cond_hist: chex.Array,
+):
     """
     Compute the offline version of the Kalman-Filter, i.e,
     the kalman smoother for the hidden state.
@@ -422,25 +428,35 @@ def kalman_smoother(params: LDS,
     Sigmat_giv_T = Sigma_hist[-1, :]
 
     smoother_step_run = partial(smoother_step, params=params)
-    elements = (mu_hist[-2::-1],
-                Sigma_hist[-2::-1, ...],
-                mu_cond_hist[::-1, ...],
-                Sigma_cond_hist[::-1, ...])
+    elements = (
+        mu_hist[-2::-1],
+        Sigma_hist[-2::-1, ...],
+        mu_cond_hist[::-1, ...],
+        Sigma_cond_hist[::-1, ...],
+    )
     initial_state = (mut_giv_T, Sigmat_giv_T, 0)
 
-    _, (mu_hist_smooth, Sigma_hist_smooth) = lax.scan(smoother_step_run, initial_state, elements)
+    _, (mu_hist_smooth, Sigma_hist_smooth) = lax.scan(
+        smoother_step_run, initial_state, elements
+    )
 
-    mu_hist_smooth = jnp.concatenate([mu_hist_smooth[::-1, ...], mut_giv_T[None, ...]], axis=0)
-    Sigma_hist_smooth = jnp.concatenate([Sigma_hist_smooth[::-1, ...], Sigmat_giv_T[None, ...]], axis=0)
+    mu_hist_smooth = jnp.concatenate(
+        [mu_hist_smooth[::-1, ...], mut_giv_T[None, ...]], axis=0
+    )
+    Sigma_hist_smooth = jnp.concatenate(
+        [Sigma_hist_smooth[::-1, ...], Sigmat_giv_T[None, ...]], axis=0
+    )
 
     return mu_hist_smooth, Sigma_hist_smooth
 
 
-def smooth(params: LDS,
-           mu_hist: chex.Array,
-           Sigma_hist: chex.Array,
-           mu_cond_hist: chex.Array,
-           Sigma_cond_hist: chex.Array):
+def smooth(
+    params: LDS,
+    mu_hist: chex.Array,
+    Sigma_hist: chex.Array,
+    mu_cond_hist: chex.Array,
+    Sigma_cond_hist: chex.Array,
+):
     """
     Compute the offline version of the Kalman-Filter, i.e,
     the kalman smoother for the state space.
@@ -472,12 +488,20 @@ def smooth(params: LDS,
     """
     has_one_sim = False
     if mu_hist.ndim == 2:
-        mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist = mu_hist[None, ...], Sigma_hist[None, ...], \
-                                                             mu_cond_hist[None, ...], Sigma_cond_hist[None, ...]
+        mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist = (
+            mu_hist[None, ...],
+            Sigma_hist[None, ...],
+            mu_cond_hist[None, ...],
+            Sigma_cond_hist[None, ...],
+        )
         has_one_sim = True
     smoother_map = vmap(kalman_smoother, (None, 0, 0, 0, 0))
-    mu_hist_smooth, Sigma_hist_smooth = smoother_map(params, mu_hist, Sigma_hist,
-                                                     mu_cond_hist, Sigma_cond_hist)
+    mu_hist_smooth, Sigma_hist_smooth = smoother_map(
+        params, mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist
+    )
     if has_one_sim:
-        mu_hist_smooth, Sigma_hist_smooth = mu_hist_smooth[0, ...], Sigma_hist_smooth[0, ...]
+        mu_hist_smooth, Sigma_hist_smooth = (
+            mu_hist_smooth[0, ...],
+            Sigma_hist_smooth[0, ...],
+        )
     return mu_hist_smooth, Sigma_hist_smooth

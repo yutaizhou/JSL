@@ -9,6 +9,6 @@ setup(
         "jaxlib",
         "jax",
         "matplotlib",
-        "tensorflow_probability"
-    ]
+        "tensorflow_probability",
+    ],
 )

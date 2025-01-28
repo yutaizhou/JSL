@@ -12,5 +12,5 @@ __all__ = [
     "kf_tracking",
     "bootstrap_filter",
     "pendulum_1d",
-    "ekf_continuous"
+    "ekf_continuous",
 ]

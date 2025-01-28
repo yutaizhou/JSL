@@ -1,4 +1,4 @@
-# Demo showcasing the training of an MLP with a single hidden layer using 
+# Demo showcasing the training of an MLP with a single hidden layer using
 # Unscented Kalman Filtering (UKF).
 # In this demo, we consider the latent state to be the weights of an MLP.
 #   The observed state at time t is the output of the MLP as influenced by the weights
@@ -9,22 +9,28 @@
 #     application to XOR classification problem
 #       https://ieeexplore.ieee.org/document/6234549
 
-import jax.numpy as jnp
-from jax import vmap
-from jax.random import PRNGKey, split, normal
-from jax.flatten_util import ravel_pytree
-
-import matplotlib.pyplot as plt
 from functools import partial
 
+import jax.numpy as jnp
+import matplotlib.pyplot as plt
+from jax import vmap
+from jax.flatten_util import ravel_pytree
+from jax.random import PRNGKey, normal, split
+
 import jsl.nlds.unscented_kalman_filter as ukf_lib
+from jsl.demos.ekf_mlp import (
+    MLP,
+    apply,
+    plot_intermediate_steps,
+    plot_intermediate_steps_single,
+    plot_mlp_prediction,
+    sample_observations,
+)
 from jsl.nlds.base import NLDS
-from jsl.demos.ekf_mlp import MLP, sample_observations, apply
-from jsl.demos.ekf_mlp import plot_mlp_prediction, plot_intermediate_steps, plot_intermediate_steps_single
 
 
 def f(x):
-    return x - 10 * jnp.cos(x) * jnp.sin(x) + x ** 3
+    return x - 10 * jnp.cos(x) * jnp.sin(x) + x**3
 
 
 def fz(W):
@@ -61,18 +67,22 @@ def main():
     n_obs = 200
     xmin, xmax = -3, 3
     sigma_y = 3.0
-    x, y = sample_observations(key_sample_obs, f, n_obs, xmin, xmax, x_noise=0, y_noise=sigma_y)
+    x, y = sample_observations(
+        key_sample_obs, f, n_obs, xmin, xmax, x_noise=0, y_noise=sigma_y
+    )
     xtest = jnp.linspace(x.min(), x.max(), n_obs)
 
     # *** MLP Training with UKF ***
     n_params = W0.size
     W0 = normal(key_weights, (n_params,)) * 1  # initial random guess
     Q = jnp.eye(n_params) * 1e-4  # parameters do not change
-    R = jnp.eye(1) * sigma_y ** 2  # observation noise is fixed
+    R = jnp.eye(1) * sigma_y**2  # observation noise is fixed
 
     Vinit = jnp.eye(n_params) * 5  # vague prior
     alpha, beta, kappa = 0.01, 2.0, 3.0 - n_params
-    ukf = NLDS(fz, lambda w, x: fwd_mlp_weights(w, x).T, Q, R, alpha, beta, kappa, n_params)
+    ukf = NLDS(
+        fz, lambda w, x: fwd_mlp_weights(w, x).T, Q, R, alpha, beta, kappa, n_params
+    )
     ukf_mu_hist, ukf_Sigma_hist = ukf_lib.filter(ukf, W0, y, x[:, None], Vinit)
     step = -1
     W_ukf, SW_ukf = ukf_mu_hist[step], ukf_Sigma_hist[step]
@@ -84,13 +94,30 @@ def main():
 
     fig, ax = plt.subplots(2, 2)
     intermediate_steps = [10, 20, 30, 40, 50, 60]
-    plot_intermediate_steps(key, ax, fwd_mlp_obs_weights, intermediate_steps, xtest, ukf_mu_hist, ukf_Sigma_hist, x,
-                            y)
+    plot_intermediate_steps(
+        key,
+        ax,
+        fwd_mlp_obs_weights,
+        intermediate_steps,
+        xtest,
+        ukf_mu_hist,
+        ukf_Sigma_hist,
+        x,
+        y,
+    )
     plt.suptitle("UKF + MLP training")
     all_figures["ukf-mlp-intermediate"] = fig
-    figures_intermediate = plot_intermediate_steps_single(key, "ukf", fwd_mlp_obs_weights,
-                                                          intermediate_steps, xtest, ukf_mu_hist, ukf_Sigma_hist, x,
-                                                          y)
+    figures_intermediate = plot_intermediate_steps_single(
+        key,
+        "ukf",
+        fwd_mlp_obs_weights,
+        intermediate_steps,
+        xtest,
+        ukf_mu_hist,
+        ukf_Sigma_hist,
+        x,
+        y,
+    )
     all_figures = {**all_figures, **figures_intermediate}
 
     return all_figures

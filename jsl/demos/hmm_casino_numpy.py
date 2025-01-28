@@ -6,13 +6,16 @@
 # the die was biased.
 # Original matlab code: https://github.com/probml/pmtk3/blob/master/demos/casinoDemo.m
 
-from jsl.hmm.hmm_numpy_lib import (HMMNumpy, hmm_sample_numpy,
-                                   hmm_forwards_backwards_numpy, hmm_viterbi_numpy)
-
-from jsl.hmm.hmm_utils import hmm_plot_graphviz
-
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+
+from jsl.hmm.hmm_numpy_lib import (
+    HMMNumpy,
+    hmm_forwards_backwards_numpy,
+    hmm_sample_numpy,
+    hmm_viterbi_numpy,
+)
+from jsl.hmm.hmm_utils import hmm_plot_graphviz
 
 
 def find_dishonest_intervals(z_hist):
@@ -76,16 +79,15 @@ def plot_inference(inference_values, z_hist, ax, state=1, map_estimate=False):
 
 def main():
     # state transition matrix
-    A = np.array([
-        [0.95, 0.05],
-        [0.10, 0.90]
-    ])
+    A = np.array([[0.95, 0.05], [0.10, 0.90]])
 
     # observation matrix
-    B = np.array([
-        [1 / 6, 1 / 6, 1 / 6, 1 / 6, 1 / 6, 1 / 6],  # fair die
-        [1 / 10, 1 / 10, 1 / 10, 1 / 10, 1 / 10, 5 / 10]  # loaded die
-    ])
+    B = np.array(
+        [
+            [1 / 6, 1 / 6, 1 / 6, 1 / 6, 1 / 6, 1 / 6],  # fair die
+            [1 / 10, 1 / 10, 1 / 10, 1 / 10, 1 / 10, 5 / 10],  # loaded die
+        ]
+    )
 
     n_samples = 300
     init_state_dist = np.array([1, 1]) / 2
@@ -127,7 +129,10 @@ def main():
     dict_figures["hmm_casino_map"] = fig
 
     file_name = "hmm_casino_params"
-    states, observations = ["Fair Dice", "Loaded Dice"], [str(i + 1) for i in range(B.shape[1])]
+    states, observations = (
+        ["Fair Dice", "Loaded Dice"],
+        [str(i + 1) for i in range(B.shape[1])],
+    )
     dotfile = hmm_plot_graphviz(A, B, states, observations)
     # dotfile = hmm_plot_graphviz(params, file_name, states, observations)
     dotfile_dict = {"hmm_casino_graphviz": dotfile}
@@ -136,7 +141,7 @@ def main():
 
 
 if __name__ == "__main__":
-    from jsl.demos.plot_utils import savefig, savedotfile
+    from jsl.demos.plot_utils import savedotfile, savefig
 
     figs, dotfile = main()
     savefig(figs)

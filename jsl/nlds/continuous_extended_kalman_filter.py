@@ -3,13 +3,12 @@ Extended Kalman Filter for a nonlinear continuous time
 dynamical system with observations in discrete time.
 """
 
-import jax
-import jax.numpy as jnp
-from jax import lax, jacrev
+from math import ceil
 
 import chex
-
-from math import ceil
+import jax
+import jax.numpy as jnp
+from jax import jacrev, lax
 
 from jsl.nlds.base import NLDS
 
@@ -50,13 +49,15 @@ def _rk2(x0, f, nsteps, dt):
     return simulation
 
 
-def sample(key: chex.PRNGKey,
-           params: NLDS,
-           x0: chex.Array,
-           T: float,
-           nsamples: int,
-           dt: float = 0.01,
-           noisy: bool = False):
+def sample(
+    key: chex.PRNGKey,
+    params: NLDS,
+    x0: chex.Array,
+    T: float,
+    nsamples: int,
+    dt: float = 0.01,
+    noisy: bool = False,
+):
     """
     Run the Extended Kalman Filter algorithm. First, we integrate
     up to time T, then we obtain nsamples equally-spaced points. Finally,
@@ -100,15 +101,21 @@ def sample(key: chex.PRNGKey,
     nsteps += correction * jump_size
 
     key_state, key_obs = jax.random.split(key)
-    state_noise = jax.random.multivariate_normal(key_state, jnp.zeros(state_size), Q, (nsteps,))
-    obs_noise = jax.random.multivariate_normal(key_obs, jnp.zeros(obs_size), R, (nsteps,))
+    state_noise = jax.random.multivariate_normal(
+        key_state, jnp.zeros(state_size), Q, (nsteps,)
+    )
+    obs_noise = jax.random.multivariate_normal(
+        key_obs, jnp.zeros(obs_size), R, (nsteps,)
+    )
     simulation = _rk2(x0, fz, nsteps, dt)
 
     if noisy:
         simulation = simulation + jnp.sqrt(dt) * state_noise
 
     sample_state = simulation[::jump_size]
-    sample_obs = jnp.apply_along_axis(fx, 1, sample_state) + obs_noise[:len(sample_state)]
+    sample_obs = (
+        jnp.apply_along_axis(fx, 1, sample_state) + obs_noise[: len(sample_state)]
+    )
 
     return sample_state, sample_obs, jump_size
 
@@ -117,12 +124,14 @@ def _Vt_dot(V, G, Q):
     return G @ V @ G.T + Q
 
 
-def estimate(params: NLDS,
-             sample_state: chex.Array,
-             sample_obs: chex.Array,
-             jump_size: int,
-             dt: float,
-             return_history: bool = True):
+def estimate(
+    params: NLDS,
+    sample_state: chex.Array,
+    sample_obs: chex.Array,
+    jump_size: int,
+    dt: float,
+    return_history: bool = True,
+):
     """
     Run the Extended Kalman Filter algorithm over a set of observed samples.
 

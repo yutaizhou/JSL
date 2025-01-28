@@ -8,15 +8,18 @@
 #   * Neural Network Training Using Unscented and Extended Kalman Filter
 #       https://juniperpublishers.com/raej/RAEJ.MS.ID.555568.php
 
-import jax
-import jax.numpy as jnp
-import flax.linen as nn
-import matplotlib.pyplot as plt
-import jsl.nlds.extended_kalman_filter as ekf_lib
-from jax.flatten_util import ravel_pytree
 from functools import partial
 from typing import Sequence
+
+import flax.linen as nn
+import jax
+import jax.numpy as jnp
+import matplotlib.pyplot as plt
+from jax.flatten_util import ravel_pytree
+
+import jsl.nlds.extended_kalman_filter as ekf_lib
 from jsl.nlds.base import NLDS
+
 
 class MLP(nn.Module):
     features: Sequence[int]
@@ -72,11 +75,15 @@ def plot_mlp_prediction(key, xobs, yobs, xtest, fw, w, Sw, ax, n_samples=100):
     for sample in sample_yhat:  # sample curves
         ax.plot(xtest, sample, c="tab:gray", alpha=0.07)
     ax.plot(xtest, sample_yhat.mean(axis=0))  # mean of posterior predictive
-    ax.scatter(xobs, yobs, s=14, c="none", edgecolor="black", label="observations", alpha=0.5)
+    ax.scatter(
+        xobs, yobs, s=14, c="none", edgecolor="black", label="observations", alpha=0.5
+    )
     ax.set_xlim(xobs.min(), xobs.max())
 
 
-def plot_intermediate_steps(key, ax, fwd_func, intermediate_steps, xtest, mu_hist, Sigma_hist, x, y):
+def plot_intermediate_steps(
+    key, ax, fwd_func, intermediate_steps, xtest, mu_hist, Sigma_hist, x, y
+):
     """
     Plot the intermediate steps of the training process, all of them in the same plot
     but in different subplots.
@@ -89,7 +96,9 @@ def plot_intermediate_steps(key, ax, fwd_func, intermediate_steps, xtest, mu_his
     plt.tight_layout()
 
 
-def plot_intermediate_steps_single(key, method, fwd_func, intermediate_steps, xtest, mu_hist, Sigma_hist, x, y):
+def plot_intermediate_steps_single(
+    key, method, fwd_func, intermediate_steps, xtest, mu_hist, Sigma_hist, x, y
+):
     """
     Plot the intermediate steps of the training process, each one in a different plot.
     """
@@ -107,7 +116,7 @@ def plot_intermediate_steps_single(key, method, fwd_func, intermediate_steps, xt
 
 
 def f(x):
-    return x - 10 * jnp.cos(x) * jnp.sin(x) + x ** 3
+    return x - 10 * jnp.cos(x) * jnp.sin(x) + x**3
 
 
 def fz(W):
@@ -132,7 +141,6 @@ def main():
     variables = model.init(key_init, batch)
     W0, unflatten_fn = ravel_pytree(variables)
 
-
     fwd_mlp = partial(apply, model=model, unflatten_fn=unflatten_fn)
     # vectorised for multiple observations
     fwd_mlp_obs = jax.vmap(fwd_mlp, in_axes=[None, 0])
@@ -143,18 +151,22 @@ def main():
     n_obs = 200
     xmin, xmax = -3, 3
     sigma_y = 3.0
-    x, y = sample_observations(key_sample_obs, f, n_obs, xmin, xmax, x_noise=0, y_noise=sigma_y)
+    x, y = sample_observations(
+        key_sample_obs, f, n_obs, xmin, xmax, x_noise=0, y_noise=sigma_y
+    )
     xtest = jnp.linspace(x.min(), x.max(), n_obs)
 
     # *** MLP Training with EKF ***
     n_params = W0.size
     W0 = jax.random.normal(key_weights, (n_params,)) * 1  # initial random guess
     Q = jnp.eye(n_params) * 1e-4  # parameters do not change
-    R = jnp.eye(1) * sigma_y ** 2  # observation noise is fixed
+    R = jnp.eye(1) * sigma_y**2  # observation noise is fixed
     Vinit = jnp.eye(n_params) * 100  # vague prior
 
     ekf = NLDS(fz, fwd_mlp, Q, R)
-    (W_ekf, SW_ekf), hist_ekf = ekf_lib.filter(ekf, W0, y[:, None], x[:, None], Vinit, return_params=["mean", "cov"])
+    (W_ekf, SW_ekf), hist_ekf = ekf_lib.filter(
+        ekf, W0, y[:, None], x[:, None], Vinit, return_params=["mean", "cov"]
+    )
     ekf_mu_hist, ekf_Sigma_hist = hist_ekf["mean"], hist_ekf["cov"]
 
     # Plot final performance
@@ -166,11 +178,30 @@ def main():
     # Plot intermediate performance
     intermediate_steps = [10, 20, 30, 40, 50, 60]
     fig, ax = plt.subplots(2, 2)
-    plot_intermediate_steps(key, ax, fwd_mlp_obs_weights, intermediate_steps, xtest, ekf_mu_hist, ekf_Sigma_hist, x, y)
+    plot_intermediate_steps(
+        key,
+        ax,
+        fwd_mlp_obs_weights,
+        intermediate_steps,
+        xtest,
+        ekf_mu_hist,
+        ekf_Sigma_hist,
+        x,
+        y,
+    )
     plt.suptitle("EKF + MLP training")
     all_figures["ekf-mlp-intermediate"] = fig
-    figures_intermediates = plot_intermediate_steps_single(key, "ekf", fwd_mlp_obs_weights,
-                                                           intermediate_steps, xtest, ekf_mu_hist, ekf_Sigma_hist, x, y)
+    figures_intermediates = plot_intermediate_steps_single(
+        key,
+        "ekf",
+        fwd_mlp_obs_weights,
+        intermediate_steps,
+        xtest,
+        ekf_mu_hist,
+        ekf_Sigma_hist,
+        x,
+        y,
+    )
     all_figures = {**all_figures, **figures_intermediates}
     return all_figures
 

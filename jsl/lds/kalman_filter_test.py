@@ -1,7 +1,7 @@
-from jax import random
-from jax import numpy as jnp
 import numpy as np
 import tensorflow_probability.substrates.jax.distributions as tfd
+from jax import numpy as jnp
+from jax import random
 
 from jsl.lds.kalman_filter import LDS, kalman_filter, kalman_smoother
 
@@ -19,8 +19,10 @@ def lds_jsl_to_tfp(num_timesteps, lds):
 
     tfp_lgssm = tfd.LinearGaussianStateSpaceModel(
         num_timesteps,
-        lds.A, dynamics_noise_dist,
-        lds.C, emission_noise_dist,
+        lds.A,
+        dynamics_noise_dist,
+        lds.C,
+        emission_noise_dist,
         initial_dist,
     )
 
@@ -53,7 +55,9 @@ def test_kalman_filter():
 
     filter_output = kalman_filter(lds_instance, x_hist)
     JSL_filtered_means, JSL_filtered_covs, *_ = filter_output
-    JSL_smoothed_means, JSL_smoothed_covs = kalman_smoother(lds_instance, *filter_output)
+    JSL_smoothed_means, JSL_smoothed_covs = kalman_smoother(
+        lds_instance, *filter_output
+    )
 
     tfp_lgssm = lds_jsl_to_tfp(num_timesteps, lds_instance)
     _, tfp_filtered_means, tfp_filtered_covs, *_ = tfp_lgssm.forward_filter(x_hist)

@@ -5,14 +5,14 @@
 #   * Section on Kalman Filters in PML vol2 book
 #   * Nonlinear Dynamics and Chaos - Steven Strogatz
 
-import numpy as np
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+import numpy as np
 from jax import random
-from jsl.demos.plot_utils import plot_ellipse
 
+from jsl.demos.plot_utils import plot_ellipse
+from jsl.lds.cont_kalman_filter import filter, sample
 from jsl.lds.kalman_filter import LDS
-from jsl.lds.cont_kalman_filter import sample, filter
 
 
 def main():

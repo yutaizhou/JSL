@@ -1,20 +1,21 @@
-'''
+"""
 Simple sanity check for all four Hidden Markov Models' implementations.
-'''
-import jax.numpy as jnp
-from jax.random import PRNGKey
-
-import matplotlib.pyplot as plt
-import numpy as np
+"""
 
 import distrax
+import jax.numpy as jnp
+import matplotlib.pyplot as plt
+import numpy as np
 from distrax import HMM
-
-from jsl.hmm.hmm_numpy_lib import HMMNumpy, hmm_forwards_backwards_numpy, hmm_viterbi_numpy
-
-from jsl.hmm.hmm_lib import HMMJax, hmm_viterbi_jax, hmm_forwards_backwards_jax
+from jax.random import PRNGKey
 
 import jsl.hmm.hmm_logspace_lib as hmm_logspace_lib
+from jsl.hmm.hmm_lib import HMMJax, hmm_forwards_backwards_jax, hmm_viterbi_jax
+from jsl.hmm.hmm_numpy_lib import (
+    HMMNumpy,
+    hmm_forwards_backwards_numpy,
+    hmm_viterbi_numpy,
+)
 
 
 def plot_inference(inference_values, z_hist, ax, state=1, map_estimate=False):
@@ -77,27 +78,30 @@ def find_dishonest_intervals(z_hist):
 
 
 # state transition matrix
-A = jnp.array([
-    [0.95, 0.05],
-    [0.10, 0.90]
-])
+A = jnp.array([[0.95, 0.05], [0.10, 0.90]])
 
 # observation matrix
-B = jnp.array([
-    [1 / 6, 1 / 6, 1 / 6, 1 / 6, 1 / 6, 1 / 6],  # fair die
-    [1 / 10, 1 / 10, 1 / 10, 1 / 10, 1 / 10, 5 / 10]  # loaded die
-])
+B = jnp.array(
+    [
+        [1 / 6, 1 / 6, 1 / 6, 1 / 6, 1 / 6, 1 / 6],  # fair die
+        [1 / 10, 1 / 10, 1 / 10, 1 / 10, 1 / 10, 5 / 10],  # loaded die
+    ]
+)
 
 n_samples = 300
 init_state_dist = jnp.array([1, 1]) / 2
 hmm_numpy = HMMNumpy(np.array(A), np.array(B), np.array(init_state_dist))
 hmm_jax = HMMJax(A, B, init_state_dist)
-hmm = HMM(trans_dist=distrax.Categorical(probs=A),
-          init_dist=distrax.Categorical(probs=init_state_dist),
-          obs_dist=distrax.Categorical(probs=B))
-hmm_log = hmm_logspace_lib.HMM(trans_dist=distrax.Categorical(probs=A),
-                               init_dist=distrax.Categorical(probs=init_state_dist),
-                               obs_dist=distrax.Categorical(probs=B))
+hmm = HMM(
+    trans_dist=distrax.Categorical(probs=A),
+    init_dist=distrax.Categorical(probs=init_state_dist),
+    obs_dist=distrax.Categorical(probs=B),
+)
+hmm_log = hmm_logspace_lib.HMM(
+    trans_dist=distrax.Categorical(probs=A),
+    init_dist=distrax.Categorical(probs=init_state_dist),
+    obs_dist=distrax.Categorical(probs=B),
+)
 
 seed = 314
 z_hist, x_hist = hmm.sample(seed=PRNGKey(seed), seq_len=n_samples)
@@ -110,16 +114,16 @@ print(f"x: {x_hist_str}")
 print(f"z: {z_hist_str}")
 
 # Do inference
-alpha_numpy, _, gamma_numpy, loglik_numpy = hmm_forwards_backwards_numpy(hmm_numpy,
-                                                                         np.array(x_hist),
-                                                                         len(x_hist))
-alpha_jax, _, gamma_jax, loglik_jax = hmm_forwards_backwards_jax(hmm_jax,
-                                                                 x_hist,
-                                                                 len(x_hist))
+alpha_numpy, _, gamma_numpy, loglik_numpy = hmm_forwards_backwards_numpy(
+    hmm_numpy, np.array(x_hist), len(x_hist)
+)
+alpha_jax, _, gamma_jax, loglik_jax = hmm_forwards_backwards_jax(
+    hmm_jax, x_hist, len(x_hist)
+)
 
-alpha_log, _, gamma_log, loglik_log = hmm_logspace_lib.hmm_forwards_backwards_log(hmm_log,
-                                                                                  x_hist,
-                                                                                  len(x_hist))
+alpha_log, _, gamma_log, loglik_log = hmm_logspace_lib.hmm_forwards_backwards_log(
+    hmm_log, x_hist, len(x_hist)
+)
 alpha, beta, gamma, loglik = hmm.forward_backward(x_hist)
 
 assert np.allclose(alpha_numpy, alpha)

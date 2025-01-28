@@ -9,17 +9,16 @@ import matplotlib.pyplot as plt
 from jax import random
 from jax.ops import index_update
 
-from jsl.nlds.base import NLDS
+import jsl.nlds.bootstrap_filter as b_lib
 import jsl.nlds.extended_kalman_filter as ekf_lib
 import jsl.nlds.unscented_kalman_filter as ukf_lib
-import jsl.nlds.bootstrap_filter as b_lib
+from jsl.nlds.base import NLDS
 
 
 def plot_filter_true(ax, time, estimate, obs, ground_truth, label, colors="tab:blue"):
     ax.plot(time, estimate, c="black", label=label)
     ax.scatter(time, obs, s=10, c="none", edgecolors=colors)
-    ax.plot(time, ground_truth, c="gray", linewidth=8, alpha=0.5,
-            label="true angle")
+    ax.plot(time, ground_truth, c="gray", linewidth=8, alpha=0.5, label="true angle")
     ax.legend()
 
 
@@ -39,10 +38,7 @@ def main():
     g = 10
     dt = 0.015
     qc = 0.06
-    Q = jnp.array([
-        [qc * dt ** 3 / 3, qc * dt ** 2 / 2],
-        [qc * dt ** 2 / 2, qc * dt]
-    ])
+    Q = jnp.array([[qc * dt**3 / 3, qc * dt**2 / 2], [qc * dt**2 / 2, qc * dt]])
 
     fx_vmap = jax.vmap(fx)
     fz_vec = jax.vmap(lambda x: fz(x, g=g, dt=dt))
@@ -61,8 +57,12 @@ def main():
     key_noisy, key_values = random.split(key_noisy)
     sample_obs_noise = sample_obs.copy()
     samples_map = random.bernoulli(key_noisy, 0.5, (nsteps,))
-    replacement_values = random.uniform(key_values, (samples_map.sum(),), minval=-2, maxval=2)
-    sample_obs_noise = index_update(sample_obs_noise.ravel(), samples_map, replacement_values)
+    replacement_values = random.uniform(
+        key_values, (samples_map.sum(),), minval=-2, maxval=2
+    )
+    sample_obs_noise = index_update(
+        sample_obs_noise.ravel(), samples_map, replacement_values
+    )
     colors = ["tab:red" if samp else "tab:blue" for samp in samples_map]
 
     # *** Perform filtering ****
@@ -76,13 +76,22 @@ def main():
     _, ekf_hist = ekf_lib.filter(model, x0, sample_obs, return_params=["mean", "cov"])
     ekf_mean_hist, ekf_Sigma_hist = ekf_hist["mean"], ekf_hist["cov"]
     ukf_mean_hist, ukf_Sigma_hist = ukf_lib.filter(ukf, x0, sample_obs)
-    pf_mean_hist = b_lib.filter(particle_filter, key_pf, x0, sample_obs, nsamples=4_000, Vinit=Vinit)
+    pf_mean_hist = b_lib.filter(
+        particle_filter, key_pf, x0, sample_obs, nsamples=4_000, Vinit=Vinit
+    )
 
     print("Filtering outlier data...")
-    _, ekf_perturbed_hist = ekf_lib.filter(model, x0, sample_obs_noise, return_params=["mean", "cov"])
-    ekf_perturbed_mean_hist, ekf_Sigma_hist = ekf_perturbed_hist["mean"], ekf_perturbed_hist["cov"]
+    _, ekf_perturbed_hist = ekf_lib.filter(
+        model, x0, sample_obs_noise, return_params=["mean", "cov"]
+    )
+    ekf_perturbed_mean_hist, ekf_Sigma_hist = (
+        ekf_perturbed_hist["mean"],
+        ekf_perturbed_hist["cov"],
+    )
     ukf_perturbed_mean_hist, ukf_Sigma_hist = ukf_lib.filter(ukf, x0, sample_obs_noise)
-    pf_perturbed_mean_hist = b_lib.filter(particle_filter, key_pf, x0, sample_obs_noise, nsamples=2_000)
+    pf_perturbed_mean_hist = b_lib.filter(
+        particle_filter, key_pf, x0, sample_obs_noise, nsamples=2_000
+    )
 
     ekf_estimate = fx_vmap(ekf_mean_hist)
     ukf_estimate = fx_vmap(ukf_mean_hist)
@@ -108,18 +117,39 @@ def main():
     dict_figures["pendulum_pf_1d_demo"] = fig
 
     fig, ax = plt.subplots()
-    plot_filter_true(ax, time, pf_perturbed_estimate, sample_obs_noise,
-                     ground_truth, "Bootstrap PF (noisy)", colors=colors)
+    plot_filter_true(
+        ax,
+        time,
+        pf_perturbed_estimate,
+        sample_obs_noise,
+        ground_truth,
+        "Bootstrap PF (noisy)",
+        colors=colors,
+    )
     dict_figures["pendulum_pf_noisy_1d_demo"] = fig
 
     fig, ax = plt.subplots()
-    plot_filter_true(ax, time, ekf_perturbed_estimate, sample_obs_noise,
-                     ground_truth, "Extended KF (noisy)", colors=colors)
+    plot_filter_true(
+        ax,
+        time,
+        ekf_perturbed_estimate,
+        sample_obs_noise,
+        ground_truth,
+        "Extended KF (noisy)",
+        colors=colors,
+    )
     dict_figures["pendulum_ekf_noisy_1d_demo"] = fig
 
     fig, ax = plt.subplots()
-    plot_filter_true(ax, time, ukf_perturbed_estimate, sample_obs_noise,
-                     ground_truth, "Unscented KF (noisy)", colors=colors)
+    plot_filter_true(
+        ax,
+        time,
+        ukf_perturbed_estimate,
+        sample_obs_noise,
+        ground_truth,
+        "Unscented KF (noisy)",
+        colors=colors,
+    )
     dict_figures["pendulum_ukf_noisy_1d_demo"] = fig
 
     return dict_figures

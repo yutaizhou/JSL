@@ -1,15 +1,13 @@
 # Jax implementation of a Linear Dynamical System where the observation noise is not known.
 # Author:  Gerardo Durán-Martín (@gerdm), Aleyna Kara(@karalleyna)
 
-import chex
-
-import jax.numpy as jnp
-from jax import lax, vmap, tree_map
-
 from dataclasses import dataclass
 from functools import partial
-from typing import Union, Callable
+from typing import Callable, Union
 
+import chex
+import jax.numpy as jnp
+from jax import lax, tree_map, vmap
 from tensorflow_probability.substrates import jax as tfp
 
 tfd = tfp.distributions
@@ -45,6 +43,7 @@ class LDS:
         to zero, the initial state will be completely determined
         by mu0
     """
+
     A: chex.Array
     C: Union[chex.Array, Callable]
     Q: chex.Array
@@ -55,8 +54,7 @@ class LDS:
     tau: chex.Array
 
 
-def kalman_filter(params: LDS, x_hist: chex.Array,
-                  return_history: bool = True):
+def kalman_filter(params: LDS, x_hist: chex.Array, return_history: bool = True):
     """
     Compute the online version of the Kalman-Filter, i.e,
     the one-step-ahead prediction for the hidden state or the
@@ -88,8 +86,14 @@ def kalman_filter(params: LDS, x_hist: chex.Array,
         covariates, response = obs
 
         mu_cond = jnp.matmul(A, mu, precision=lax.Precision.HIGHEST)
-        Sigmat_cond = jnp.matmul(jnp.matmul(A, Sigma, precision=lax.Precision.HIGHEST), A,
-                                 precision=lax.Precision.HIGHEST) + Q
+        Sigmat_cond = (
+            jnp.matmul(
+                jnp.matmul(A, Sigma, precision=lax.Precision.HIGHEST),
+                A,
+                precision=lax.Precision.HIGHEST,
+            )
+            + Q
+        )
 
         e_k = response - covariates.T @ mu_cond
         s_k = covariates.T @ Sigmat_cond @ covariates + 1
@@ -111,8 +115,7 @@ def kalman_filter(params: LDS, x_hist: chex.Array,
     return mu, Sigma
 
 
-def filter(params: LDS, x_hist: chex.Array,
-           return_history: bool = True):
+def filter(params: LDS, x_hist: chex.Array, return_history: bool = True):
     """
     Compute the online version of the Kalman-Filter, i.e,
     the one-step-ahead prediction for the hidden state or the

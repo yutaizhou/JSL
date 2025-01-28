@@ -11,13 +11,12 @@
 
 # Author: Gerardo Durán-Martín (@gerdm)
 
-import jax
-from jax.random import split, multivariate_normal
-
-import chex
-
 from dataclasses import dataclass
 from typing import Callable
+
+import chex
+import jax
+from jax.random import multivariate_normal, split
 
 
 @dataclass
@@ -36,13 +35,14 @@ class NLDS:
     R: array(obs_size, obs_size) or function
         Nonlinear observation noise covariance function
     """
+
     fz: Callable
     fx: Callable
     Q: chex.Array
     R: chex.Array
-    alpha: float = 0.
-    beta: float = 0.
-    kappa: float = 0.
+    alpha: float = 0.0
+    beta: float = 0.0
+    kappa: float = 0.0
     d: int = 0
 
     def Qz(self, z, *args):
@@ -62,7 +62,9 @@ class NLDS:
         key_system, key_obs, key = split(key, 3)
 
         state_t = multivariate_normal(key_system, self.fz(state_t), self.Qz(state_t))
-        obs_t = multivariate_normal(key_obs, self.fx(state_t, *obs), self.Rx(state_t, *obs))
+        obs_t = multivariate_normal(
+            key_obs, self.fx(state_t, *obs), self.Rx(state_t, *obs)
+        )
 
         return (key, state_t), (state_t, obs_t)
 

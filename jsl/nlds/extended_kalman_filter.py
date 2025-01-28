@@ -1,18 +1,22 @@
-import chex
-from jax import jacrev, lax
-import jax.numpy as jnp
-from typing import Dict, List, Tuple, Callable
 from functools import partial
+from typing import Callable, Dict, List, Tuple
+
+import chex
+import jax.numpy as jnp
+from jax import jacrev, lax
+
 from .base import NLDS
 
-def filter_step(state: Tuple[chex.Array, chex.Array, int],
-                xs: Tuple[chex.Array, chex.Array],
-                params: NLDS,
-                Dfx: Callable,
-                Dfz: Callable,
-                eps: float,
-                return_params: Dict
-                ) -> Tuple[Tuple[chex.Array, chex.Array, int], Dict]:
+
+def filter_step(
+    state: Tuple[chex.Array, chex.Array, int],
+    xs: Tuple[chex.Array, chex.Array],
+    params: NLDS,
+    Dfx: Callable,
+    Dfz: Callable,
+    eps: float,
+    return_params: Dict,
+) -> Tuple[Tuple[chex.Array, chex.Array, int], Dict]:
     """
     Run a single step of the extended Kalman filter (EKF) algorithm.
 
@@ -63,14 +67,16 @@ def filter_step(state: Tuple[chex.Array, chex.Array, int],
     return (mu_t, Vt, t + 1), carry
 
 
-def filter(params: NLDS,
-           init_state: chex.Array,
-           observations: chex.Array,
-           covariates: chex.Array = None,
-           Vinit: chex.Array = None,
-           return_params: List = None,
-           eps: float = 0.001,
-           return_history: bool = True):
+def filter(
+    params: NLDS,
+    init_state: chex.Array,
+    observations: chex.Array,
+    covariates: chex.Array = None,
+    Vinit: chex.Array = None,
+    return_params: List = None,
+    eps: float = 0.001,
+    return_history: bool = True,
+):
     """
     Run the Extended Kalman Filter algorithm over a set of observed samples.
 
@@ -112,8 +118,14 @@ def filter(params: NLDS,
 
     return_params = [] if return_params is None else return_params
 
-    filter_step_pass = partial(filter_step, params=params, Dfx=Dfx, Dfz=Dfz,
-                               eps=eps, return_params=return_params)
+    filter_step_pass = partial(
+        filter_step,
+        params=params,
+        Dfx=Dfx,
+        Dfz=Dfz,
+        eps=eps,
+        return_params=return_params,
+    )
     (mu_t, Vt, _), hist_elements = lax.scan(filter_step_pass, state, xs)
 
     if return_history:

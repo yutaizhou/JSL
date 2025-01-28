@@ -4,14 +4,17 @@
 
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-from jsl.demos.plot_utils import plot_ellipse
 from jax import random
-from jsl.lds.kalman_filter import LDS, smooth, filter
+
+from jsl.demos.plot_utils import plot_ellipse
+from jsl.lds.kalman_filter import LDS, filter, smooth
+
 
 def plot_uncertainty_ellipses(means, covs, ax):
     timesteps = len(means)
     for t in range(timesteps):
         plot_ellipse(covs[t], means[t], ax, plot_center=False, alpha=0.7)
+
 
 def main():
     dx = 1.1
@@ -20,16 +23,8 @@ def main():
 
     mean_0 = jnp.array([1, 1, 1, 0]).astype(float)
     Sigma_0 = jnp.eye(4)
-    A = jnp.array([
-        [0.1, 1.1, dx, 0],
-        [-1, 1, 0, dx],
-        [0, 0, 0.1, 0],
-        [0, 0, 0, 0.1]
-    ])
-    C = jnp.array([
-        [1, 0, 0, 0],
-        [0, 1, 0, 0]
-    ])
+    A = jnp.array([[0.1, 1.1, dx, 0], [-1, 1, 0, dx], [0, 0, 0.1, 0], [0, 0, 0, 0.1]])
+    C = jnp.array([[1, 0, 0, 0], [0, 1, 0, 0]])
     Q = jnp.eye(4) * 0.001
     R = jnp.eye(2) * 4
 
@@ -38,9 +33,10 @@ def main():
 
     res = filter(lds_instance, obs_hist)
     mean_hist, Sigma_hist, mean_cond_hist, Sigma_cond_hist = res
-    mean_hist_smooth, Sigma_hist_smooth = smooth(lds_instance, mean_hist,
-                                                 Sigma_hist, mean_cond_hist, Sigma_cond_hist)
-    
+    mean_hist_smooth, Sigma_hist_smooth = smooth(
+        lds_instance, mean_hist, Sigma_hist, mean_cond_hist, Sigma_cond_hist
+    )
+
     dict_figures = {}
 
     fig_spiral_state, ax = plt.subplots()
@@ -48,7 +44,6 @@ def main():
     ax.scatter(*obs_hist.T, marker="+", s=60)
     ax.set_title("State space")
     dict_figures["spiral-state"] = fig_spiral_state
-
 
     fig_spiral_filtered, ax = plt.subplots()
     ax.plot(*mean_hist[:, :2].T)
@@ -69,6 +64,7 @@ def main():
 
 if __name__ == "__main__":
     from jsl.demos.plot_utils import savefig
+
     figures = main()
     savefig(figures)
     plt.show()

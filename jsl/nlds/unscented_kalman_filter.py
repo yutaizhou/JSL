@@ -2,11 +2,11 @@
 Implementation of the Unscented Kalman Filter for discrete time systems
 """
 
-import jax.numpy as jnp
-from jax.lax import scan
+from typing import List
 
 import chex
-from typing import List
+import jax.numpy as jnp
+from jax.lax import scan
 
 from .base import NLDS
 
@@ -30,12 +30,14 @@ def sqrtm(M):
     return R
 
 
-def filter(params: NLDS,
-           init_state: chex.Array,
-           sample_obs: chex.Array,
-           observations: List = None,
-           Vinit: chex.Array = None,
-           return_history: bool = True):
+def filter(
+    params: NLDS,
+    init_state: chex.Array,
+    sample_obs: chex.Array,
+    observations: List = None,
+    Vinit: chex.Array = None,
+    return_history: bool = True,
+):
     """
     Run the Unscented Kalman Filter algorithm over a set of observed samples.
     Parameters
@@ -58,15 +60,23 @@ def filter(params: NLDS,
     fx, fz = params.fx, params.fz
     Q, R = params.Qz, params.Rx
 
-    lmbda = alpha ** 2 * (d + kappa) - d
+    lmbda = alpha**2 * (d + kappa) - d
     gamma = jnp.sqrt(d + lmbda)
 
-    wm_vec = jnp.array([1 / (2 * (d + lmbda)) if i > 0
-                        else lmbda / (d + lmbda)
-                        for i in range(2 * d + 1)])
-    wc_vec = jnp.array([1 / (2 * (d + lmbda)) if i > 0
-                        else lmbda / (d + lmbda) + (1 - alpha ** 2 + beta)
-                        for i in range(2 * d + 1)])
+    wm_vec = jnp.array(
+        [
+            1 / (2 * (d + lmbda)) if i > 0 else lmbda / (d + lmbda)
+            for i in range(2 * d + 1)
+        ]
+    )
+    wc_vec = jnp.array(
+        [
+            1 / (2 * (d + lmbda))
+            if i > 0
+            else lmbda / (d + lmbda) + (1 - alpha**2 + beta)
+            for i in range(2 * d + 1)
+        ]
+    )
     nsteps, *_ = sample_obs.shape
     initial_mu_t = init_state
     initial_Sigma_t = Q(init_state) if Vinit is None else Vinit
@@ -88,7 +98,7 @@ def filter(params: NLDS,
 
         z_bar = fz(sigma_points)
         mu_bar = z_bar @ wm_vec
-        Sigma_bar = (z_bar - mu_bar[:, None])
+        Sigma_bar = z_bar - mu_bar[:, None]
         Sigma_bar = jnp.einsum("i,ji,ki->jk", wc_vec, Sigma_bar, Sigma_bar) + Q(mu_t)
 
         Sigma_bar_half = sqrtm(Sigma_bar)
@@ -104,7 +114,9 @@ def filter(params: NLDS,
 
         mu_hat_component = z_bar - mu_bar[:, None]
         x_hat_component = x_bar - x_hat[:, None]
-        Sigma_bar_y = jnp.einsum("i,ji,ki->jk", wc_vec, mu_hat_component, x_hat_component)
+        Sigma_bar_y = jnp.einsum(
+            "i,ji,ki->jk", wc_vec, mu_hat_component, x_hat_component
+        )
         Kt = Sigma_bar_y @ jnp.linalg.inv(St)
 
         mu_t = mu_bar + Kt @ (sample_observation - x_hat)
@@ -112,7 +124,9 @@ def filter(params: NLDS,
 
         return (mu_t, Sigma_t), (mu_t, Sigma_t)
 
-    (mu, Sigma), (mu_hist, Sigma_hist) = scan(filter_step, (initial_mu_t, initial_Sigma_t), sample_obs[1:])
+    (mu, Sigma), (mu_hist, Sigma_hist) = scan(
+        filter_step, (initial_mu_t, initial_Sigma_t), sample_obs[1:]
+    )
 
     mu_hist = jnp.vstack([initial_mu_t[None, ...], mu_hist])
     Sigma_hist = jnp.vstack([initial_Sigma_t[None, ...], Sigma_hist])

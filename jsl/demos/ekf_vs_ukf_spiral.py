@@ -1,8 +1,7 @@
 # Compare extended Kalman filter with unscented kalman filter on a nonlinear 2d tracking problem
-from jax import random
-
-import matplotlib.pyplot as plt
 import jax.numpy as jnp
+import matplotlib.pyplot as plt
+from jax import random
 
 import jsl.nlds.extended_kalman_filter as ekf_lib
 import jsl.nlds.unscented_kalman_filter as ukf_lib
@@ -31,8 +30,11 @@ def plot_inference(sample_obs, mean_hist, Sigma_hist):
     ax.plot(*mean_hist.T, c="tab:orange", label="filtered")
     ax.scatter(*mean_hist[0], c="black", zorder=3)
     plt.legend()
-    collection = [(mut, Vt) for mut, Vt in zip(mean_hist[::4], Sigma_hist[::4])
-                  if Vt[0, 0] > 0 and Vt[1, 1] > 0 and abs(Vt[1, 0] - Vt[0, 1]) < 7e-4]
+    collection = [
+        (mut, Vt)
+        for mut, Vt in zip(mean_hist[::4], Sigma_hist[::4])
+        if Vt[0, 0] > 0 and Vt[1, 1] > 0 and abs(Vt[1, 0] - Vt[0, 1]) < 7e-4
+    ]
     for mut, Vt in collection:
         plot_utils.plot_ellipse(Vt, mut, ax, plot_center=False, alpha=0.9, zorder=3)
     plt.axis("equal")
@@ -40,9 +42,11 @@ def plot_inference(sample_obs, mean_hist, Sigma_hist):
 
 
 def main():
-    def fz(x, dt): return x + dt * jnp.array([jnp.sin(x[1]), jnp.cos(x[0])])
+    def fz(x, dt):
+        return x + dt * jnp.array([jnp.sin(x[1]), jnp.cos(x[0])])
 
-    def fx(x, *args): return x
+    def fx(x, *args):
+        return x
 
     dt = 0.4
     nsteps = 100
@@ -59,10 +63,11 @@ def main():
     ekf_model = NLDS(lambda x: fz(x, dt), fx, Qt, Rt)
     sample_state, sample_obs = ekf_model.sample(key, x0, nsteps)
 
-    ukf_model = NLDS(lambda x: fz(x, dt), fx, Qt, Rt,
-                     alpha, beta, kappa, state_size)
+    ukf_model = NLDS(lambda x: fz(x, dt), fx, Qt, Rt, alpha, beta, kappa, state_size)
 
-    _, ekf_hist = ekf_lib.filter(ekf_model, x0, sample_obs, return_params=["mean", "cov"])
+    _, ekf_hist = ekf_lib.filter(
+        ekf_model, x0, sample_obs, return_params=["mean", "cov"]
+    )
     ukf_mean_hist, ukf_Sigma_hist = ukf_lib.filter(ukf_model, x0, sample_obs)
 
     ekf_mean_hist = ekf_hist["mean"]

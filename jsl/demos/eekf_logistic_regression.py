@@ -12,11 +12,10 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 from jax import random
 
-from jsl.nlds.base import NLDS
-from jsl.nlds.extended_kalman_filter import filter
-
 # Import data and baseline solution
 from jsl.demos import logreg_biclusters as demo
+from jsl.nlds.base import NLDS
+from jsl.nlds.extended_kalman_filter import filter
 
 figures, data = demo.main()
 X = data["X"]
@@ -30,19 +29,25 @@ w_laplace = data["w_laplace"]
 # jax.config.update("jax_platform_name", "cpu")
 # jax.config.update("jax_enable_x64", True)
 
-def sigmoid(x): return jnp.exp(x) / (1 + jnp.exp(x))
+
+def sigmoid(x):
+    return jnp.exp(x) / (1 + jnp.exp(x))
 
 
-def log_sigmoid(z): return z - jnp.log1p(jnp.exp(z))
+def log_sigmoid(z):
+    return z - jnp.log1p(jnp.exp(z))
 
 
-def fz(x): return x
+def fz(x):
+    return x
 
 
-def fx(w, x): return sigmoid(w[None, :] @ x)
+def fx(w, x):
+    return sigmoid(w[None, :] @ x)
 
 
-def Rt(w, x): return (sigmoid(w @ x) * (1 - sigmoid(w @ x)))[None, None]
+def Rt(w, x):
+    return (sigmoid(w @ x) * (1 - sigmoid(w @ x)))[None, None]
 
 
 def main():
@@ -63,7 +68,9 @@ def main():
     P0 = jnp.eye(M) * 2.0
 
     model = NLDS(fz, fx, Pt, Rt)
-    (w_eekf, P_eekf), eekf_hist = filter(model, mu_t, y, Phi, P0, return_params=["mean", "cov"])
+    (w_eekf, P_eekf), eekf_hist = filter(
+        model, mu_t, y, Phi, P0, return_params=["mean", "cov"]
+    )
     w_eekf_hist = eekf_hist["mean"]
     P_eekf_hist = eekf_hist["cov"]
 
@@ -93,7 +100,13 @@ def main():
     for k, (wk, Pk, wk_laplace, c) in enumerate(zip(*elements)):
         fig_weight_k, ax = plt.subplots()
         ax.errorbar(timesteps, wk, jnp.sqrt(Pk), c=c, label=f"$w_{k}$ online (EEKF)")
-        ax.axhline(y=wk_laplace, c=c, linestyle="dotted", label=f"$w_{k}$ batch (Laplace)", linewidth=3)
+        ax.axhline(
+            y=wk_laplace,
+            c=c,
+            linestyle="dotted",
+            label=f"$w_{k}$ batch (Laplace)",
+            linewidth=3,
+        )
 
         ax.set_xlim(1, n_datapoints)
         ax.legend(framealpha=0.7, loc="upper right")

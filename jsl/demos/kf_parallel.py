@@ -3,10 +3,11 @@
 # Each of the missiles is then filtered and smoothed in parallel
 
 import jax.numpy as jnp
-from jsl.lds.kalman_filter import LDS, filter, smooth
-from jsl.demos.plot_utils import plot_ellipse
 import matplotlib.pyplot as plt
 from jax import random
+
+from jsl.demos.plot_utils import plot_ellipse
+from jsl.lds.kalman_filter import LDS, filter, smooth
 
 
 def sample_filter_smooth(key, lds_model, nsteps, n_samples, noisy_init):
@@ -41,7 +42,9 @@ def sample_filter_smooth(key, lds_model, nsteps, n_samples, noisy_init):
     """
     z_hist, x_hist = lds_model.sample(key, nsteps, n_samples, noisy_init)
     mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist = filter(lds_model, x_hist)
-    mu_hist_smooth, Sigma_hist_smooth = smooth(lds_model, mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist)
+    mu_hist_smooth, Sigma_hist_smooth = smooth(
+        lds_model, mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist
+    )
 
     return {
         "z_hist": z_hist,
@@ -51,7 +54,7 @@ def sample_filter_smooth(key, lds_model, nsteps, n_samples, noisy_init):
         "mu_cond_hist": mu_cond_hist,
         "Sigma_cond_hist": Sigma_cond_hist,
         "mu_hist_smooth": mu_hist_smooth,
-        "Sigma_hist_smooth": Sigma_hist_smooth
+        "Sigma_hist_smooth": Sigma_hist_smooth,
     }
 
 
@@ -66,24 +69,17 @@ def plot_collection(obs, ax, means=None, covs=None, **kwargs):
             if covs is not None:
                 cov = covs[nsim]
                 for t in range(1, n_steps, 3):
-                    plot_ellipse(cov[t][:2, :2], mean[t, :2], ax,
-                    plot_center=False, alpha=0.7)
+                    plot_ellipse(
+                        cov[t][:2, :2], mean[t, :2], ax, plot_center=False, alpha=0.7
+                    )
         ax.scatter(*X.T, marker="+", s=60)
 
 
 def main():
     Δ = 1.0
-    A = jnp.array([
-        [1, 0, Δ, 0],
-        [0, 1, 0, Δ],
-        [0, 0, 1, 0],
-        [0, 0, 0, 1]
-    ])
+    A = jnp.array([[1, 0, Δ, 0], [0, 1, 0, Δ], [0, 0, 1, 0], [0, 0, 0, 1]])
 
-    C = jnp.array([
-        [1, 0, 0, 0],
-        [0, 1, 0, 0]
-    ]).astype(float)
+    C = jnp.array([[1, 0, 0, 0], [0, 1, 0, 0]]).astype(float)
 
     state_size, _ = A.shape
     observation_size, _ = C.shape
@@ -93,7 +89,6 @@ def main():
     # Prior parameter distribution
     mu0 = jnp.array([8, 10, 1, 0]).astype(float)
     Sigma0 = jnp.eye(state_size) * 0.1
-
 
     key = random.PRNGKey(3141)
     lds_instance = LDS(A, C, Q, R, mu0, Sigma0)
@@ -114,7 +109,9 @@ def main():
     dict_figures["missiles_filtered"] = fig_filtered
 
     fig_smoothed, ax = plt.subplots()
-    plot_collection(result["x_hist"], ax, result["mu_hist_smooth"], result["Sigma_hist_smooth"])
+    plot_collection(
+        result["x_hist"], ax, result["mu_hist_smooth"], result["Sigma_hist_smooth"]
+    )
     ax.set_title("Smoothed")
     dict_figures["missiles_smoothed"] = fig_smoothed
 
@@ -123,6 +120,7 @@ def main():
 
 if __name__ == "__main__":
     from jsl.demos.plot_utils import savefig
+
     figures = main()
     savefig(figures)
     plt.show()
