@@ -2,7 +2,8 @@ from math import ceil
 
 import jax
 import jax.numpy as jnp
-from jax.ops import index_update
+
+# from jax.ops import index_update
 
 
 class ContinuousExtendedKalmanFilter:
@@ -45,14 +46,16 @@ class ContinuousExtendedKalmanFilter:
         """
         input_dim, *_ = x0.shape
         simulation = jnp.zeros((nsteps, input_dim))
-        simulation = index_update(simulation, 0, x0)
+        simuation = simulation.at[0].set(x0)
+        # simulation = index_update(simulation, 0, x0)
 
         xt = x0.copy()
         for t in range(1, nsteps):
             k1 = f(xt)
             k2 = f(xt + dt * k1)
             xt = xt + dt * (k1 + k2) / 2
-            simulation = index_update(simulation, t, xt)
+            simuation = simuation.at[t].set(xt)
+            # simulation = index_update(simulation, t, xt)
         return simulation
 
     def sample(self, key, x0, T, nsamples, dt=0.01, noisy=False):
@@ -140,8 +143,11 @@ class ContinuousExtendedKalmanFilter:
         mu_hist = jnp.zeros((nsamples, self.state_size))
         V_hist = jnp.zeros((nsamples, self.state_size, self.state_size))
 
-        mu_hist = index_update(mu_hist, 0, mu_t)
-        V_hist = index_update(V_hist, 0, Vt)
+        mu_hist = mu_hist.at[0].set(mu_t)
+        V_hist = V_hist.at[0].set(Vt)
+
+        # mu_hist = index_update(mu_hist, 0, mu_t)
+        # V_hist = index_update(V_hist, 0, Vt)
 
         for t in range(1, nsamples):
             for _ in range(jump_size):
@@ -162,7 +168,10 @@ class ContinuousExtendedKalmanFilter:
             mu_t = mu_t_cond + Kt @ (sample_obs[t] - self.fx(mu_t_cond))
             Vt = (I - Kt @ Ht) @ Vt_cond
 
-            mu_hist = index_update(mu_hist, t, mu_t)
-            V_hist = index_update(V_hist, t, Vt)
+            mu_hist = mu_hist.at[t].set(mu_t)
+            V_hist = V_hist.at[t].set(Vt)
+
+            # mu_hist = index_update(mu_hist, t, mu_t)
+            # V_hist = index_update(V_hist, t, Vt)
 
         return mu_hist, V_hist

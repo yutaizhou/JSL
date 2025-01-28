@@ -8,7 +8,8 @@ import jax
 import jax.numpy as jnp
 from jax import random
 from jax.numpy.linalg import inv
-from jax.ops import index_update
+
+# from jax.ops import index_update
 
 
 class ContinuousKalmanFilter:
@@ -73,14 +74,16 @@ class ContinuousKalmanFilter:
 
         input_dim, *_ = x0.shape
         simulation = jnp.zeros((nsteps, input_dim))
-        simulation = index_update(simulation, 0, x0)
+        simutation = simulation.at[0].set(x0)
+        # simulation = index_update(simulation, 0, x0)
 
         xt = x0.copy()
         for t in range(1, nsteps):
             k1 = f(xt)
             k2 = f(xt + dt * k1)
             xt = xt + dt * (k1 + k2) / 2
-            simulation = index_update(simulation, t, xt)
+            simutation = simutation.at[t].set(xt)
+            # simulation = index_update(simulation, t, xt)
         return simulation
 
     def sample(self, key, x0, T, nsamples, dt=0.01, noisy=False):
@@ -171,10 +174,15 @@ class ContinuousKalmanFilter:
         mu1 = self.mu0 + K1 @ (x_hist[0] - self.C @ self.mu0)
         Sigma1 = (I - K1 @ self.C) @ self.Sigma0
 
-        mu_hist = index_update(mu_hist, 0, mu1)
-        Sigma_hist = index_update(Sigma_hist, 0, Sigma1)
-        mu_cond_hist = index_update(mu_cond_hist, 0, self.mu0)
-        Sigma_cond_hist = index_update(Sigma_hist, 0, self.Sigma0)
+        mu_hist = mu_hist.at[0].set(mu1)
+        Sigma_hist = Sigma_hist.at[0].set(Sigma1)
+        mu_cond_hist = mu_cond_hist.at[0].set(self.mu0)
+        Sigma_cond_hist = Sigma_cond_hist.at[0].set(self.Sigma0)
+
+        # mu_hist = index_update(mu_hist, 0, mu1)
+        # Sigma_hist = index_update(Sigma_hist, 0, Sigma1)
+        # mu_cond_hist = index_update(mu_cond_hist, 0, self.mu0)
+        # Sigma_cond_hist = index_update(Sigma_hist, 0, self.Sigma0)
 
         Sigman = Sigma1.copy()
         mun = mu1.copy()
@@ -198,9 +206,14 @@ class ContinuousKalmanFilter:
             mun = mu_update + Kn @ (x_hist[n] - x_update)
             Sigman = (I - Kn @ self.C) @ Sigman_cond
 
-            mu_hist = index_update(mu_hist, n, mun)
-            Sigma_hist = index_update(Sigma_hist, n, Sigman)
-            mu_cond_hist = index_update(mu_cond_hist, n, mu_update)
-            Sigma_cond_hist = index_update(Sigma_cond_hist, n, Sigman_cond)
+            mu_hist = mu_hist.at[n].set(mun)
+            Sigma_hist = Sigma_hist.at[n].set(Sigman)
+            mu_cond_hist = mu_cond_hist.at[n].set(mu_update)
+            Sigma_cond_hist = Sigma_cond_hist.at[n].set(Sigman_cond)
+
+            # mu_hist = index_update(mu_hist, n, mun)
+            # Sigma_hist = index_update(Sigma_hist, n, Sigman)
+            # mu_cond_hist = index_update(mu_cond_hist, n, mu_update)
+            # Sigma_cond_hist = index_update(Sigma_cond_hist, n, Sigman_cond)
 
         return mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist

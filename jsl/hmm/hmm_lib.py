@@ -17,7 +17,8 @@ import numpy as np
 import superimport
 from jax import jit, lax, vmap
 from jax.nn import softmax
-from jax.ops import index, index_update
+
+# from jax.ops import index, index_update
 from jax.random import PRNGKey, normal, split
 from jax.scipy.special import logit
 from scipy.special import softmax
@@ -499,7 +500,8 @@ def compute_expected_obs_counts_jax(gamma, obs, n_states, n_obs):
 
     def scan_fn(BB, elems):
         o, g = elems
-        BB = index_update(BB, index[:, o], BB[:, o] + g)
+        BB = BB.at[o].set(BB[:, o] + g)
+        # BB = index_update(BB, index[:, o], BB[:, o] + g)
         return BB, jnp.zeros((0,))
 
     BB = jnp.zeros((n_states, n_obs))

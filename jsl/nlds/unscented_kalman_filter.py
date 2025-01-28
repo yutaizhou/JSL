@@ -1,6 +1,7 @@
 import jax.numpy as jnp
 from jax.lax import scan
-from jax.ops import index_update
+
+# from jax.ops import index_update
 from jax.random import choice, multivariate_normal, split
 from jax.scipy import stats
 
