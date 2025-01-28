@@ -10,14 +10,14 @@
 # from jsl.hmm.hmm_numpy_lib import (HMMNumpy, hmm_sample_numpy, hmm_plot_graphviz,
 #                                  hmm_forwards_backwards_numpy, hmm_viterbi_numpy)
 
-from jsl.hmm.hmm_utils import hmm_plot_graphviz
-
-import numpy as np
+import distrax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-import distrax
+import numpy as np
 from distrax import HMM
 from jax.random import PRNGKey
+
+from jsl.hmm.hmm_utils import hmm_plot_graphviz
 
 
 def find_dishonest_intervals(z_hist):
@@ -80,24 +80,25 @@ def plot_inference(inference_values, z_hist, ax, state=1, map_estimate=False):
 
 
 # state transition matrix
-A = jnp.array([
-    [0.95, 0.05],
-    [0.10, 0.90]
-])
+A = jnp.array([[0.95, 0.05], [0.10, 0.90]])
 
 # observation matrix
-B = jnp.array([
-    [1 / 6, 1 / 6, 1 / 6, 1 / 6, 1 / 6, 1 / 6],  # fair die
-    [1 / 10, 1 / 10, 1 / 10, 1 / 10, 1 / 10, 5 / 10]  # loaded die
-])
+B = jnp.array(
+    [
+        [1 / 6, 1 / 6, 1 / 6, 1 / 6, 1 / 6, 1 / 6],  # fair die
+        [1 / 10, 1 / 10, 1 / 10, 1 / 10, 1 / 10, 5 / 10],  # loaded die
+    ]
+)
 
 n_samples = 300
 init_state_dist = jnp.array([1, 1]) / 2
 # hmm = HMM(A, B, init_state_dist)
 
-hmm = HMM(trans_dist=distrax.Categorical(probs=A),
-          init_dist=distrax.Categorical(probs=init_state_dist),
-          obs_dist=distrax.Categorical(probs=B))
+hmm = HMM(
+    trans_dist=distrax.Categorical(probs=A),
+    init_dist=distrax.Categorical(probs=init_state_dist),
+    obs_dist=distrax.Categorical(probs=B),
+)
 
 seed = 314
 z_hist, x_hist = hmm.sample(seed=PRNGKey(seed), seq_len=n_samples)
@@ -140,7 +141,10 @@ ax.set_title("Viterbi")
 dict_figures["hmm_casino_map"] = fig
 
 file_name = "hmm_casino_params"
-states, observations = ["Fair Dice", "Loaded Dice"], [str(i + 1) for i in range(B.shape[1])]
+states, observations = (
+    ["Fair Dice", "Loaded Dice"],
+    [str(i + 1) for i in range(B.shape[1])],
+)
 
 AA = hmm.trans_dist.probs
 assert np.allclose(A, AA)
@@ -149,11 +153,11 @@ dotfile_dict = {"hmm_casino_graphviz": dotfile}
 
 # return dict_figures, dotfile_dict
 
-'''
+"""
 if __name__ == "__main__":
     from jsl.demos.plot_utils import savefig, savedotfile
     figs, dotfile = main()
     savefig(figs)
     savedotfile(dotfile)
     plt.show()
-'''
+"""

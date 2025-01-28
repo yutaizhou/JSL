@@ -1,7 +1,7 @@
 import jax.numpy as jnp
-from jax.random import split, choice, multivariate_normal
 from jax.lax import scan
 from jax.ops import index_update
+from jax.random import choice, multivariate_normal, split
 from jax.scipy import stats
 
 from .base import NLDS
@@ -18,7 +18,7 @@ class UnscentedKalmanFilter(NLDS):
         self.alpha = alpha
         self.beta = beta
         self.kappa = kappa
-        self.lmbda = alpha ** 2 * (self.d + kappa) - self.d
+        self.lmbda = alpha**2 * (self.d + kappa) - self.d
         self.gamma = jnp.sqrt(self.d + self.lmbda)
 
     @classmethod
@@ -33,12 +33,12 @@ class UnscentedKalmanFilter(NLDS):
         """
         Compute the matrix square-root of a hermitian
         matrix M. i,e, R such that RR = M
-        
+
         Parameters
         ----------
         M: array(m, m)
             Hermitian matrix
-        
+
         Returns
         -------
         array(m, m): square-root matrix
@@ -60,12 +60,23 @@ class UnscentedKalmanFilter(NLDS):
         * array(nsamples, state_size, state_size)
             History of filtered covariance terms
         """
-        wm_vec = jnp.array([1 / (2 * (self.d + self.lmbda)) if i > 0
-                            else self.lmbda / (self.d + self.lmbda)
-                            for i in range(2 * self.d + 1)])
-        wc_vec = jnp.array([1 / (2 * (self.d + self.lmbda)) if i > 0
-                            else self.lmbda / (self.d + self.lmbda) + (1 - self.alpha ** 2 + self.beta)
-                            for i in range(2 * self.d + 1)])
+        wm_vec = jnp.array(
+            [
+                1 / (2 * (self.d + self.lmbda))
+                if i > 0
+                else self.lmbda / (self.d + self.lmbda)
+                for i in range(2 * self.d + 1)
+            ]
+        )
+        wc_vec = jnp.array(
+            [
+                1 / (2 * (self.d + self.lmbda))
+                if i > 0
+                else self.lmbda / (self.d + self.lmbda)
+                + (1 - self.alpha**2 + self.beta)
+                for i in range(2 * self.d + 1)
+            ]
+        )
         nsteps, *_ = sample_obs.shape
         initial_mu_t = init_state
         initial_Sigma_t = self.Q(init_state) if Vinit is None else Vinit
@@ -87,8 +98,10 @@ class UnscentedKalmanFilter(NLDS):
 
             z_bar = self.fz(sigma_points)
             mu_bar = z_bar @ wm_vec
-            Sigma_bar = (z_bar - mu_bar[:, None])
-            Sigma_bar = jnp.einsum("i,ji,ki->jk", wc_vec, Sigma_bar, Sigma_bar) + self.Q(mu_t)
+            Sigma_bar = z_bar - mu_bar[:, None]
+            Sigma_bar = jnp.einsum(
+                "i,ji,ki->jk", wc_vec, Sigma_bar, Sigma_bar
+            ) + self.Q(mu_t)
 
             Sigma_bar_half = self.sqrtm(Sigma_bar)
             comp1 = mu_bar[:, None] + self.gamma * Sigma_bar_half
@@ -103,7 +116,9 @@ class UnscentedKalmanFilter(NLDS):
 
             mu_hat_component = z_bar - mu_bar[:, None]
             x_hat_component = x_bar - x_hat[:, None]
-            Sigma_bar_y = jnp.einsum("i,ji,ki->jk", wc_vec, mu_hat_component, x_hat_component)
+            Sigma_bar_y = jnp.einsum(
+                "i,ji,ki->jk", wc_vec, mu_hat_component, x_hat_component
+            )
             Kt = Sigma_bar_y @ jnp.linalg.inv(St)
 
             mu_t = mu_bar + Kt @ (sample_observation - x_hat)
@@ -111,7 +126,9 @@ class UnscentedKalmanFilter(NLDS):
 
             return (mu_t, Sigma_t), (mu_t, Sigma_t)
 
-        _, (mu_hist, Sigma_hist) = scan(filter_step, (initial_mu_t, initial_Sigma_t), (observations, sample_obs))
+        _, (mu_hist, Sigma_hist) = scan(
+            filter_step, (initial_mu_t, initial_Sigma_t), (observations, sample_obs)
+        )
 
         mu_hist = jnp.vstack([initial_mu_t, mu_hist])
         Sigma_hist = jnp.vstack([initial_Sigma_t, Sigma_hist])

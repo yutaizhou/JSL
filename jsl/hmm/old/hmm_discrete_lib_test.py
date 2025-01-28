@@ -1,22 +1,24 @@
-'''
+"""
 This demo compares the Jax, Numpy and Distrax version of forwards-backwards algorithm in terms of the speed.
 Also, checks whether or not they give the same result.
 Author : Aleyna Kara (@karalleyna)
-'''
-
-import superimport
+"""
 
 import time
 
-import jax.numpy as jnp
-from jax.random import PRNGKey, split, uniform
-import numpy as np
-
-from hmm_discrete_lib import HMMJax, HMMNumpy
-from hmm_discrete_lib import hmm_sample_jax, hmm_forwards_backwards_jax, hmm_forwards_backwards_numpy
-
 import distrax
+import jax.numpy as jnp
+import numpy as np
+import superimport
 from distrax import HMM
+from hmm_discrete_lib import (
+    HMMJax,
+    HMMNumpy,
+    hmm_forwards_backwards_jax,
+    hmm_forwards_backwards_numpy,
+    hmm_sample_jax,
+)
+from jax.random import PRNGKey, split, uniform
 
 seed = 0
 rng_key = PRNGKey(seed)
@@ -39,25 +41,32 @@ rng_key = PRNGKey(seed)
 
 params_numpy = HMMNumpy(A, B, init_state_dist)
 params_jax = HMMJax(A, B, init_state_dist)
-hmm_distrax = HMM(trans_dist=distrax.Categorical(probs=A),
-                  obs_dist=distrax.Categorical(probs=B),
-                  init_dist=distrax.Categorical(probs=init_state_dist))
+hmm_distrax = HMM(
+    trans_dist=distrax.Categorical(probs=A),
+    obs_dist=distrax.Categorical(probs=B),
+    init_dist=distrax.Categorical(probs=init_state_dist),
+)
 
 z_hist, x_hist = hmm_sample_jax(params_jax, n_samples, rng_key)
 
 start = time.time()
-alphas_np, _, gammas_np, loglikelihood_np = hmm_forwards_backwards_numpy(params_numpy, x_hist, len(x_hist))
-print(f'Time taken by numpy version of forwards backwards : {time.time()-start}s')
+alphas_np, _, gammas_np, loglikelihood_np = hmm_forwards_backwards_numpy(
+    params_numpy, x_hist, len(x_hist)
+)
+print(f"Time taken by numpy version of forwards backwards : {time.time()-start}s")
 
 start = time.time()
-alphas_jax, _, gammas_jax, loglikelihood_jax = hmm_forwards_backwards_jax(params_jax, jnp.array(x_hist), len(x_hist))
-print(f'Time taken by JAX version of forwards backwards: {time.time()-start}s')
+alphas_jax, _, gammas_jax, loglikelihood_jax = hmm_forwards_backwards_jax(
+    params_jax, jnp.array(x_hist), len(x_hist)
+)
+print(f"Time taken by JAX version of forwards backwards: {time.time()-start}s")
 
 start = time.time()
-alphas, _, gammas, loglikelihood = hmm_distrax.forward_backward(obs_seq=jnp.array(x_hist),
-                                                                length=len(x_hist))
+alphas, _, gammas, loglikelihood = hmm_distrax.forward_backward(
+    obs_seq=jnp.array(x_hist), length=len(x_hist)
+)
 
-print(f'Time taken by HMM distrax : {time.time()-start}s')
+print(f"Time taken by HMM distrax : {time.time()-start}s")
 
 assert np.allclose(alphas_np, alphas_jax)
 assert np.allclose(loglikelihood_np, loglikelihood_jax)

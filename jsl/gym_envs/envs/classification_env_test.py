@@ -3,20 +3,15 @@
 import functools
 import itertools
 
-from absl.testing import absltest
-from absl.testing import parameterized
-import haiku as hk
-
-import jax
-
-import numpy as np
-
 import envs.classification_env as classification_env
+import haiku as hk
+import jax
+import numpy as np
+from absl.testing import absltest, parameterized
 from envs.base import PriorKnowledge, make_gaussian_sampler
 
 
 class MLPClassificationEnsembleTest(parameterized.TestCase):
-
     @parameterized.parameters(itertools.product([3, 10], [1, 3], [1, 3]))
     def test_valid_data(self, num_steps: int, input_dim: int, tau: int):
         np.random.seed(0)
@@ -25,15 +20,17 @@ class MLPClassificationEnsembleTest(parameterized.TestCase):
         train_batch_size, test_batch_size = 2, 2
 
         x_train_generator = lambda k, n: jax.random.normal(k, [n, input_dim])
-        x_test_generator = make_gaussian_sampler(
-            input_dim)
+        x_test_generator = make_gaussian_sampler(input_dim)
 
-        fn_transformed = hk.without_apply_rng(hk.transform(
-            lambda x: hk.nets.MLP([10, 10, num_class])(x)))  # pylint: disable=[unnecessary-lambda]
+        fn_transformed = hk.without_apply_rng(
+            hk.transform(lambda x: hk.nets.MLP([10, 10, num_class])(x))
+        )  # pylint: disable=[unnecessary-lambda]
         params = fn_transformed.init(next(rng), np.zeros(shape=(input_dim,)))
         logit_fn = lambda x: fn_transformed.apply(params, x)
 
-        prior_knowledge = PriorKnowledge(input_dim, num_steps, tau, num_classes=num_class, hidden=10)
+        prior_knowledge = PriorKnowledge(
+            input_dim, num_steps, tau, num_classes=num_class, hidden=10
+        )
         mlp_model = classification_env.ClassificationEnv(
             apply_fn=logit_fn,
             x_train_generator=x_train_generator,
@@ -42,7 +39,7 @@ class MLPClassificationEnsembleTest(parameterized.TestCase):
             nsteps=2,
             train_batch_size=train_batch_size,
             test_batch_size=test_batch_size,
-            key=next(rng)
+            key=next(rng),
         )
         # Check that the training data is reasonable.
         assert mlp_model.x_train.shape[1:] == (train_batch_size, input_dim)
@@ -78,14 +75,16 @@ class MLPClassificationEnsembleTest(parameterized.TestCase):
         rng = hk.PRNGSequence(0)
 
         x_train_generator = lambda k, n: jax.random.normal(k, [n, input_dim])
-        x_test_generator = make_gaussian_sampler(
-            input_dim)
-        fn_transformed = hk.without_apply_rng(hk.transform(
-            lambda x: hk.nets.MLP([10, 10, num_class])(x)))  # pylint: disable=[unnecessary-lambda]
+        x_test_generator = make_gaussian_sampler(input_dim)
+        fn_transformed = hk.without_apply_rng(
+            hk.transform(lambda x: hk.nets.MLP([10, 10, num_class])(x))
+        )  # pylint: disable=[unnecessary-lambda]
         params = fn_transformed.init(next(rng), np.zeros(shape=(input_dim,)))
         logit_fn = lambda x: fn_transformed.apply(params, x)
         train_batch_size, test_batch_size = 1, 1
-        prior_knowledge = PriorKnowledge(input_dim, num_steps, tau, num_classes=num_class, hidden=10)
+        prior_knowledge = PriorKnowledge(
+            input_dim, num_steps, tau, num_classes=num_class, hidden=10
+        )
 
         mlp_model = classification_env.ClassificationEnv(
             apply_fn=logit_fn,
@@ -116,12 +115,14 @@ class MLPClassificationEnsembleTest(parameterized.TestCase):
         rng = hk.PRNGSequence(0)
 
         x_train_generator = lambda k, n: jax.random.normal(k, [n, input_dim])
-        x_test_generator = make_gaussian_sampler(
-            input_dim)
-        fn_transformed = hk.without_apply_rng(hk.transform(
-            lambda x: hk.nets.MLP([10, 10, num_class])(x)))  # pylint: disable=[unnecessary-lambda]
+        x_test_generator = make_gaussian_sampler(input_dim)
+        fn_transformed = hk.without_apply_rng(
+            hk.transform(lambda x: hk.nets.MLP([10, 10, num_class])(x))
+        )  # pylint: disable=[unnecessary-lambda]
         train_batch_size, test_batch_size = 1, 1
-        prior_knowledge = PriorKnowledge(input_dim, num_train, tau, num_classes=num_class, hidden=10)
+        prior_knowledge = PriorKnowledge(
+            input_dim, num_train, tau, num_classes=num_class, hidden=10
+        )
 
         labels_means = []
         for _ in range(num_seeds):
@@ -140,10 +141,10 @@ class MLPClassificationEnsembleTest(parameterized.TestCase):
 
             labels_means.append(np.mean(mlp_model.y_train))
 
-        degenerate_cases = labels_means.count(0.) + labels_means.count(1.)
+        degenerate_cases = labels_means.count(0.0) + labels_means.count(1.0)
         # Check that for at most 20% of problems, the labels are degenerate
         assert degenerate_cases / num_seeds <= 0.2
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     absltest.main()

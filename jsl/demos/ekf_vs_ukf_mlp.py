@@ -1,4 +1,4 @@
-# Demo showcasing the training of an MLP with a single hidden layer using 
+# Demo showcasing the training of an MLP with a single hidden layer using
 # Extended Kalman Filtering (EKF) and Unscented Kalman Filtering (UKF).
 # In this demo, we consider the latent state to be the weights of an MLP.
 #   The observed state at time t is the output of the MLP as influenced by the weights
@@ -11,14 +11,16 @@
 #     application to XOR classification problem
 #       https://ieeexplore.ieee.org/document/6234549
 
+from functools import partial
+
 import jax
-import numpy as np
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-from functools import partial
+import numpy as np
+from jax.random import PRNGKey, multivariate_normal, normal, permutation, split
+
 from jsl.nlds.extended_kalman_filter import ExtendedKalmanFilter
 from jsl.nlds.unscented_kalman_filter import UnscentedKalmanFilter
-from jax.random import PRNGKey, permutation, split, normal, multivariate_normal
 
 
 def mlp(W, x, n_hidden):
@@ -42,10 +44,10 @@ def mlp(W, x, n_hidden):
         Evaluation of MLP at the specified point
     """
     W1 = W[:n_hidden].reshape(n_hidden, 1)
-    W2 = W[n_hidden: 2 * n_hidden].reshape(1, n_hidden)
-    b1 = W[2 * n_hidden: 2 * n_hidden + n_hidden]
+    W2 = W[n_hidden : 2 * n_hidden].reshape(1, n_hidden)
+    b1 = W[2 * n_hidden : 2 * n_hidden + n_hidden]
     b2 = W[-1]
-    
+
     return W2 @ jnp.tanh(W1 @ x + b1) + b2
 
 
@@ -65,14 +67,18 @@ def sample_observations(key, f, n_obs, xmin, xmax, x_noise=0.1, y_noise=3.0):
 def plot_mlp_prediction(key, xobs, yobs, xtest, fw, w, Sw, ax, n_samples=100):
     W_samples = multivariate_normal(key, w, Sw, (n_samples,))
     sample_yhat = fw(W_samples, xtest[:, None])
-    for sample in sample_yhat: # sample curves
+    for sample in sample_yhat:  # sample curves
         ax.plot(xtest, sample, c="tab:gray", alpha=0.07)
-    ax.plot(xtest, sample_yhat.mean(axis=0)) # mean of posterior predictive
-    ax.scatter(xobs, yobs, s=14, c="none", edgecolor="black", label="observations", alpha=0.5)
+    ax.plot(xtest, sample_yhat.mean(axis=0))  # mean of posterior predictive
+    ax.scatter(
+        xobs, yobs, s=14, c="none", edgecolor="black", label="observations", alpha=0.5
+    )
     ax.set_xlim(xobs.min(), xobs.max())
 
 
-def plot_intermediate_steps(key, ax, fwd_func, intermediate_steps, xtest, mu_hist, Sigma_hist, x, y):
+def plot_intermediate_steps(
+    key, ax, fwd_func, intermediate_steps, xtest, mu_hist, Sigma_hist, x, y
+):
     """
     Plot the intermediate steps of the training process, all of them in the same plot
     but in different subplots.
@@ -85,7 +91,9 @@ def plot_intermediate_steps(key, ax, fwd_func, intermediate_steps, xtest, mu_his
     plt.tight_layout()
 
 
-def plot_intermediate_steps_single(key, method, fwd_func, intermediate_steps, xtest, mu_hist, Sigma_hist, x, y):
+def plot_intermediate_steps_single(
+    key, method, fwd_func, intermediate_steps, xtest, mu_hist, Sigma_hist, x, y
+):
     """
     Plot the intermediate steps of the training process, each one in a different plot.
     """
@@ -104,8 +112,12 @@ def plot_intermediate_steps_single(key, method, fwd_func, intermediate_steps, xt
 
 def main():
     all_figures = {}
-    def f(x): return x -10 * jnp.cos(x) * jnp.sin(x) + x ** 3
-    def fz(W): return W
+
+    def f(x):
+        return x - 10 * jnp.cos(x) * jnp.sin(x) + x**3
+
+    def fz(W):
+        return W
 
     # *** MLP configuration ***
     n_hidden = 6
@@ -125,18 +137,22 @@ def main():
     key_sample_obs, key_weights = split(key, 2)
     xmin, xmax = -3, 3
     sigma_y = 3.0
-    x, y = sample_observations(key_sample_obs, f, n_obs, xmin, xmax, x_noise=0, y_noise=sigma_y)
+    x, y = sample_observations(
+        key_sample_obs, f, n_obs, xmin, xmax, x_noise=0, y_noise=sigma_y
+    )
     xtest = jnp.linspace(x.min(), x.max(), n_obs)
 
     # *** MLP Training with EKF ***
 
-    W0 = normal(key_weights, (n_params,)) * 1 # initial random guess
-    Q = jnp.eye(n_params) * 1e-4; # parameters do not change
-    R = jnp.eye(1) * sigma_y**2; # observation noise is fixed
-    Vinit = jnp.eye(n_params) * 100 # vague prior
+    W0 = normal(key_weights, (n_params,)) * 1  # initial random guess
+    Q = jnp.eye(n_params) * 1e-4  # parameters do not change
+    R = jnp.eye(1) * sigma_y**2  # observation noise is fixed
+    Vinit = jnp.eye(n_params) * 100  # vague prior
 
     ekf = ExtendedKalmanFilter(fz, fwd_mlp, Q, R)
-    (W_ekf, SW_ekf), hist_ekf = ekf.filter(W0, y[:, None], x[:, None], Vinit, return_params=["mean", "cov"])
+    (W_ekf, SW_ekf), hist_ekf = ekf.filter(
+        W0, y[:, None], x[:, None], Vinit, return_params=["mean", "cov"]
+    )
     ekf_mu_hist, ekf_Sigma_hist = hist_ekf["mean"], hist_ekf["cov"]
 
     # Plot final performance
@@ -148,18 +164,39 @@ def main():
     # Plot intermediate performance
     intermediate_steps = [10, 20, 30, 40, 50, 60]
     fig, ax = plt.subplots(2, 2)
-    plot_intermediate_steps(key, ax, fwd_mlp_obs_weights, intermediate_steps, xtest, ekf_mu_hist, ekf_Sigma_hist, x, y)
+    plot_intermediate_steps(
+        key,
+        ax,
+        fwd_mlp_obs_weights,
+        intermediate_steps,
+        xtest,
+        ekf_mu_hist,
+        ekf_Sigma_hist,
+        x,
+        y,
+    )
     plt.suptitle("EKF + MLP training")
     all_figures["ekf-mlp-intermediate"] = fig
-    figures_intermediates = plot_intermediate_steps_single(key, "ekf", fwd_mlp_obs_weights,
-                                                           intermediate_steps, xtest, ekf_mu_hist, ekf_Sigma_hist, x, y)
+    figures_intermediates = plot_intermediate_steps_single(
+        key,
+        "ekf",
+        fwd_mlp_obs_weights,
+        intermediate_steps,
+        xtest,
+        ekf_mu_hist,
+        ekf_Sigma_hist,
+        x,
+        y,
+    )
     all_figures = {**all_figures, **figures_intermediates}
 
     use_ukf = True
     if use_ukf:
-        Vinit = jnp.eye(n_params) * 5 # vague prior
+        Vinit = jnp.eye(n_params) * 5  # vague prior
         alpha, beta, kappa = 0.01, 2.0, 3.0 - n_params
-        ukf = UnscentedKalmanFilter(fz, lambda w, x: fwd_mlp_weights(w, x).T, Q, R, alpha, beta, kappa, n_params)
+        ukf = UnscentedKalmanFilter(
+            fz, lambda w, x: fwd_mlp_weights(w, x).T, Q, R, alpha, beta, kappa, n_params
+        )
         ukf_mu_hist, ukf_Sigma_hist = ukf.filter(W0, y, x[:, None], Vinit)
         step = -1
         W_ukf, SW_ukf = ukf_mu_hist[step], ukf_Sigma_hist[step]
@@ -170,18 +207,38 @@ def main():
         all_figures["ukf-mlp"] = fig
 
         fig, ax = plt.subplots(2, 2)
-        plot_intermediate_steps(key, ax, fwd_mlp_obs_weights, intermediate_steps, xtest, ukf_mu_hist, ukf_Sigma_hist, x, y)
+        plot_intermediate_steps(
+            key,
+            ax,
+            fwd_mlp_obs_weights,
+            intermediate_steps,
+            xtest,
+            ukf_mu_hist,
+            ukf_Sigma_hist,
+            x,
+            y,
+        )
         plt.suptitle("UKF + MLP training")
         all_figures["ukf-mlp-intermediate"] = fig
-        figures_intermediate = plot_intermediate_steps_single(key, "ukf", fwd_mlp_obs_weights,
-                                                              intermediate_steps, xtest, ukf_mu_hist, ukf_Sigma_hist, x, y)
+        figures_intermediate = plot_intermediate_steps_single(
+            key,
+            "ukf",
+            fwd_mlp_obs_weights,
+            intermediate_steps,
+            xtest,
+            ukf_mu_hist,
+            ukf_Sigma_hist,
+            x,
+            y,
+        )
         all_figures = {**all_figures, **figures_intermediate}
-    
+
     return all_figures
 
 
 if __name__ == "__main__":
     from jsl.demos.plot_utils import savefig
+
     plt.rcParams["axes.spines.right"] = False
     plt.rcParams["axes.spines.top"] = False
     figures = main()

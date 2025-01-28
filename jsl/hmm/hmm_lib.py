@@ -5,29 +5,26 @@
 # This version is kept for historical purposes.
 # Author: Gerardo Duran-Martin (@gerdm), Aleyna Kara (@karalleyna), Kevin Murphy (@murphyk)
 
-from jax import lax
-from jax.scipy.special import logit
+import itertools
+from dataclasses import dataclass
 from functools import partial
 
-import numpy as np
-import jax.numpy as jnp
-from scipy.special import softmax
-from jax import vmap
-from jax.ops import index_update, index
-from dataclasses import dataclass
-
-import jax
-import itertools
-from jax import jit
-from jax.nn import softmax
-from jax.random import PRNGKey, split, normal
-from jsl.hmm.hmm_utils import hmm_sample_minibatches
-
-import superimport
 # !pip install flax
 import flax
+import jax
+import jax.numpy as jnp
+import numpy as np
+import superimport
+from jax import jit, lax, vmap
+from jax.nn import softmax
+from jax.ops import index, index_update
+from jax.random import PRNGKey, normal, split
+from jax.scipy.special import logit
+from scipy.special import softmax
 
-'''
+from jsl.hmm.hmm_utils import hmm_sample_minibatches
+
+"""
 Hidden Markov Model class used in jax implementations of inference algorithms.
 
 The functions of optimizers expect that the type of its parameters 
@@ -36,7 +33,7 @@ is pytree. So, they cannot work on a vanilla dataclass. To see more:
 
 Since the flax.dataclass is registered pytree beforehand, it facilitates to use
 jit, vmap and optimizers on the hidden markov model.
-'''
+"""
 
 
 @flax.struct.dataclass
@@ -47,7 +44,7 @@ class HMMJax:
 
 
 def normalize(u, axis=0, eps=1e-15):
-    '''
+    """
     Normalizes the values within the axis in a way that they sum up to 1.
 
     Parameters
@@ -64,7 +61,7 @@ def normalize(u, axis=0, eps=1e-15):
 
     * array(seq_len, n_hidden) :
         The values of the normalizer
-    '''
+    """
     u = jnp.where(u == 0, 0, jnp.where(u < eps, eps, u))
     c = u.sum(axis=axis)
     c = jnp.where(c == 0, 1, c)
@@ -73,7 +70,7 @@ def normalize(u, axis=0, eps=1e-15):
 
 @partial(jit, static_argnums=(1,))
 def hmm_sample_jax(params, seq_len, rng_key):
-    '''
+    """
     Samples an observation of given length according to the defined
     hidden markov model and gives the sequence of the hidden states
     as well as the observation.
@@ -96,7 +93,7 @@ def hmm_sample_jax(params, seq_len, rng_key):
 
     * array(seq_len,) :
         Observation sequence
-    '''
+    """
     trans_mat, obs_mat, init_dist = params.trans_mat, params.obs_mat, params.init_dist
     n_states, n_obs = obs_mat.shape
 
@@ -127,9 +124,10 @@ def hmm_sample_jax(params, seq_len, rng_key):
 ##############################
 # Inference
 
+
 @jit
 def hmm_forwards_jax(params, obs_seq, length=None):
-    '''
+    """
     Calculates a belief state
 
     Parameters
@@ -147,7 +145,7 @@ def hmm_forwards_jax(params, obs_seq, length=None):
 
     * array(seq_len, n_hidden) :
         All alpha values found for each sample
-    '''
+    """
     seq_len = len(obs_seq)
 
     if length is None:
@@ -158,9 +156,11 @@ def hmm_forwards_jax(params, obs_seq, length=None):
 
     def scan_fn(carry, t):
         (alpha_prev, log_ll_prev) = carry
-        alpha_n = jnp.where(t < length,
-                            obs_mat[:, obs_seq[t]] * (alpha_prev[:, None] * trans_mat).sum(axis=0),
-                            jnp.zeros_like(alpha_prev))
+        alpha_n = jnp.where(
+            t < length,
+            obs_mat[:, obs_seq[t]] * (alpha_prev[:, None] * trans_mat).sum(axis=0),
+            jnp.zeros_like(alpha_prev),
+        )
 
         alpha_n, cn = normalize(alpha_n)
         carry = (alpha_n, jnp.log(cn) + log_ll_prev)
@@ -183,7 +183,7 @@ def hmm_forwards_jax(params, obs_seq, length=None):
 
 @jit
 def hmm_loglikelihood_jax(params, observations, lens):
-    '''
+    """
     Finds the loglikelihood of each observation sequence parallel using vmap.
 
     Parameters
@@ -201,7 +201,7 @@ def hmm_loglikelihood_jax(params, observations, lens):
     -------
     * array(N, seq_len)
         Consists of the loglikelihood of each observation sequence
-    '''
+    """
 
     def forward_(params, x, length):
         return hmm_forwards_jax(params, x, length)[0]
@@ -211,7 +211,7 @@ def hmm_loglikelihood_jax(params, observations, lens):
 
 @jit
 def hmm_backwards_jax(params, obs_seq, length=None):
-    '''
+    """
     Computes the backwards probabilities
 
     Parameters
@@ -229,7 +229,7 @@ def hmm_backwards_jax(params, obs_seq, length=None):
     -------
     * array(seq_len, n_states)
        Beta values
-    '''
+    """
     seq_len = len(obs_seq)
 
     if length is None:
@@ -241,9 +241,13 @@ def hmm_backwards_jax(params, obs_seq, length=None):
     beta_t = jnp.ones((n_states,))
 
     def scan_fn(beta_prev, t):
-        beta_t = jnp.where(t > length,
-                           jnp.zeros_like(beta_prev),
-                           normalize((beta_prev * obs_mat[:, obs_seq[-t + 1]] * trans_mat).sum(axis=1))[0])
+        beta_t = jnp.where(
+            t > length,
+            jnp.zeros_like(beta_prev),
+            normalize(
+                (beta_prev * obs_mat[:, obs_seq[-t + 1]] * trans_mat).sum(axis=1)
+            )[0],
+        )
         return beta_t, beta_t
 
     ts = jnp.arange(2, seq_len + 1)
@@ -256,7 +260,7 @@ def hmm_backwards_jax(params, obs_seq, length=None):
 
 @jit
 def hmm_forwards_backwards_jax(params, obs_seq, length=None):
-    '''
+    """
     Computes, for each time step, the marginal conditional probability that the Hidden Markov Model was
     in each possible state given the observations that were made at each time step, i.e.
     P(z[i] | x[0], ..., x[num_steps - 1]) for all i from 0 to num_steps - 1
@@ -282,15 +286,15 @@ def hmm_forwards_backwards_jax(params, obs_seq, length=None):
 
     * float
         The loglikelihood giving log(p(x|model))
-    '''
+    """
     seq_len = len(obs_seq)
     if length is None:
         length = seq_len
 
     def gamma_t(t):
-        gamma_t = jnp.where(t < length,
-                            alpha[t] * beta[t - length],
-                            jnp.zeros((n_states,)))
+        gamma_t = jnp.where(
+            t < length, alpha[t] * beta[t - length], jnp.zeros((n_states,))
+        )
         return gamma_t
 
     ll, alpha = hmm_forwards_jax(params, obs_seq, length)
@@ -349,13 +353,19 @@ def hmm_viterbi_jax(params, obs_seq, length=None):
         return max_logp_given_successor, most_likely_given_successor
 
     final_log_prob, most_likely_sources = jax.lax.scan(
-        viterbi_forward, first_log_prob, obs_seq[1:])
+        viterbi_forward, first_log_prob, obs_seq[1:]
+    )
 
     most_likely_initial_given_successor = jnp.argmax(
-        trans_log_probs + first_log_prob, axis=-2)
-    most_likely_sources = jnp.concatenate([
-        jnp.expand_dims(most_likely_initial_given_successor, axis=0),
-        most_likely_sources], axis=0)
+        trans_log_probs + first_log_prob, axis=-2
+    )
+    most_likely_sources = jnp.concatenate(
+        [
+            jnp.expand_dims(most_likely_initial_given_successor, axis=0),
+            most_likely_sources,
+        ],
+        axis=0,
+    )
 
     def viterbi_backward(state, most_likely_sources):
         state = jax.nn.one_hot(state, n_states)
@@ -364,13 +374,15 @@ def hmm_viterbi_jax(params, obs_seq, length=None):
 
     final_state = jnp.argmax(final_log_prob)
     _, most_likely_path = jax.lax.scan(
-        viterbi_backward, final_state, most_likely_sources[1:], reverse=True)
+        viterbi_backward, final_state, most_likely_sources[1:], reverse=True
+    )
 
     return jnp.append(most_likely_path, final_state)
 
 
 ###############
 # Learning using EM (Baum Welch)
+
 
 @dataclass
 class PriorsJax:
@@ -398,9 +410,11 @@ def init_random_params_jax(sizes, rng_key):
     """
     num_hidden, num_obs = sizes
     rng_key, rng_a, rng_b, rng_pi = jax.random.split(rng_key, 4)
-    return HMMJax(jax.nn.softmax(jax.random.normal(rng_a, (num_hidden, num_hidden)), axis=1),
-                  jax.nn.softmax(jax.random.normal(rng_b, (num_hidden, num_obs)), axis=1),
-                  jax.nn.softmax(jax.random.normal(rng_pi, (num_hidden,))))
+    return HMMJax(
+        jax.nn.softmax(jax.random.normal(rng_a, (num_hidden, num_hidden)), axis=1),
+        jax.nn.softmax(jax.random.normal(rng_b, (num_hidden, num_obs)), axis=1),
+        jax.nn.softmax(jax.random.normal(rng_pi, (num_hidden,))),
+    )
 
 
 def compute_expected_trans_counts_jax(params, alpha, beta, observations):
@@ -437,15 +451,21 @@ def compute_expected_trans_counts_jax(params, alpha, beta, observations):
 
     def count_(trans_mat, obs_mat, alpha, beta, obs):
         # AA[,j,k] = sum_t p(z(t)=j, z(t+1)=k|obs)
-        AA = vmap(ksi_, in_axes=(None, None, 0, 0, 0))(trans_mat, obs_mat, alpha[:-1], beta[1:], obs[1:])
+        AA = vmap(ksi_, in_axes=(None, None, 0, 0, 0))(
+            trans_mat, obs_mat, alpha[:-1], beta[1:], obs[1:]
+        )
         return AA
 
     trans_mat, obs_mat, init_dist = params.trans_mat, params.obs_mat, params.init_dist
 
-    trans_counts = vmap(count_, in_axes=(None, None, 0, 0, 0))(trans_mat, obs_mat, alpha, beta, observations)
+    trans_counts = vmap(count_, in_axes=(None, None, 0, 0, 0))(
+        trans_mat, obs_mat, alpha, beta, observations
+    )
 
     trans_count_normalizer = jnp.sum(trans_counts, axis=[2, 3], keepdims=True)
-    trans_count_normalizer = jnp.where(trans_count_normalizer == 0, 1, trans_count_normalizer)
+    trans_count_normalizer = jnp.where(
+        trans_count_normalizer == 0, 1, trans_count_normalizer
+    )
 
     trans_counts = jnp.sum(trans_counts / trans_count_normalizer, axis=1)
     trans_counts = jnp.sum(trans_counts, axis=0)
@@ -523,10 +543,14 @@ def hmm_e_step_jax(params, observations, valid_lengths):
     trans_mat, obs_mat, init_dist = params.trans_mat, params.obs_mat, params.init_dist
     n_states, n_obs = obs_mat.shape
 
-    alpha, beta, gamma, ll = vmap(hmm_forwards_backwards_jax, in_axes=(None, 0, 0))(params, observations, valid_lengths)
+    alpha, beta, gamma, ll = vmap(hmm_forwards_backwards_jax, in_axes=(None, 0, 0))(
+        params, observations, valid_lengths
+    )
     trans_counts = compute_expected_trans_counts_jax(params, alpha, beta, observations)
 
-    obs_counts = vmap(compute_expected_obs_counts_jax, in_axes=(0, 0, None, None))(gamma, observations, n_states, n_obs)
+    obs_counts = vmap(compute_expected_obs_counts_jax, in_axes=(0, 0, None, None))(
+        gamma, observations, n_states, n_obs
+    )
     obs_counts = jnp.sum(obs_counts, axis=0)
 
     init_counts = jnp.sum(gamma[:, 0, :], axis=0)
@@ -571,8 +595,16 @@ def hmm_m_step_jax(counts, priors=None):
     return HMMJax(A, B, pi)
 
 
-def hmm_em_jax(observations, valid_lengths, n_hidden=None, n_obs=None,
-               init_params=None, priors=None, num_epochs=1, rng_key=None):
+def hmm_em_jax(
+    observations,
+    valid_lengths,
+    n_hidden=None,
+    n_obs=None,
+    init_params=None,
+    priors=None,
+    num_epochs=1,
+    rng_key=None,
+):
     """
     Implements Baum–Welch algorithm which is used for finding its components, A, B and pi.
 
@@ -617,12 +649,16 @@ def hmm_em_jax(observations, valid_lengths, n_hidden=None, n_obs=None,
         try:
             init_params = init_random_params_jax([n_hidden, n_obs], rng_key=rng_key)
         except:
-            raise ValueError("n_hidden and n_obs should be specified when init_params was not given.")
+            raise ValueError(
+                "n_hidden and n_obs should be specified when init_params was not given."
+            )
 
     epochs = jnp.arange(num_epochs)
 
     def train_step(params, epoch):
-        trans_counts, obs_counts, init_counts, ll = hmm_e_step_jax(params, observations, valid_lengths)
+        trans_counts, obs_counts, init_counts, ll = hmm_e_step_jax(
+            params, observations, valid_lengths
+        )
         params = hmm_m_step_jax([trans_counts, obs_counts, init_counts], priors)
         return params, -ll
 
@@ -662,9 +698,11 @@ def init_random_params(sizes, rng_key):
     """
     num_hidden, num_obs = sizes
     rng_key, rng_a, rng_b, rng_pi = split(rng_key, 4)
-    return HMMJax(normal(rng_a, (num_hidden, num_hidden)),
-                  normal(rng_b, (num_hidden, num_obs)),
-                  normal(rng_pi, (num_hidden,)))
+    return HMMJax(
+        normal(rng_a, (num_hidden, num_hidden)),
+        normal(rng_b, (num_hidden, num_obs)),
+        normal(rng_pi, (num_hidden,)),
+    )
 
 
 @jit
@@ -689,13 +727,24 @@ def loss_fn(params, batch, lens):
     * float
         The mean negative loglikelihood of the minibatch
     """
-    params_soft = HMMJax(softmax(params.trans_mat, axis=1),
-                         softmax(params.obs_mat, axis=1),
-                         softmax(params.init_dist))
+    params_soft = HMMJax(
+        softmax(params.trans_mat, axis=1),
+        softmax(params.obs_mat, axis=1),
+        softmax(params.init_dist),
+    )
     return -hmm_loglikelihood_jax(params_soft, batch, lens).mean()
 
 
-def fit(observations, lens, num_hidden, num_obs, batch_size, optimizer, rng_key=None, num_epochs=1):
+def fit(
+    observations,
+    lens,
+    num_hidden,
+    num_obs,
+    batch_size,
+    optimizer,
+    rng_key=None,
+    num_epochs=1,
+):
     """
     Trains the HMM model with the given number of hidden states and observations via any optimizer.
 
@@ -776,7 +825,9 @@ def fit(observations, lens, num_hidden, num_obs, batch_size, optimizer, rng_key=
             opt_state, loss = update(next(itercount), opt_state, batch, length)
             return opt_state, loss
 
-        batches, valid_lens = hmm_sample_minibatches(observations, lens, batch_size, key)
+        batches, valid_lens = hmm_sample_minibatches(
+            observations, lens, batch_size, key
+        )
         params = (batches, valid_lens)
         opt_state, losses = jax.lax.scan(train_step, opt_state, params)
         return opt_state, losses.mean()
@@ -787,7 +838,9 @@ def fit(observations, lens, num_hidden, num_obs, batch_size, optimizer, rng_key=
     losses = losses.flatten()
 
     params = get_params(opt_state)
-    params = HMMJax(softmax(params.trans_mat, axis=1),
-                    softmax(params.obs_mat, axis=1),
-                    softmax(params.init_dist))
+    params = HMMJax(
+        softmax(params.trans_mat, axis=1),
+        softmax(params.obs_mat, axis=1),
+        softmax(params.init_dist),
+    )
     return params, losses

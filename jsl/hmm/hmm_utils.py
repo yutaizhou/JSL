@@ -1,18 +1,20 @@
 # Common functions that can be used for any hidden markov model type.
 # Author: Aleyna Kara(@karalleyna)
 
+from functools import partial
+
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-from jax import vmap, jit
-from jax.random import split, randint, PRNGKey, permutation
-from functools import partial
+
 # !pip install graphviz
 from graphviz import Digraph
+from jax import jit, vmap
+from jax.random import PRNGKey, permutation, randint, split
 
 
 @partial(jit, static_argnums=(2,))
 def hmm_sample_minibatches(observations, valid_lens, batch_size, rng_key):
-    '''
+    """
     Creates minibatches consists of the random permutations of the
     given observation sequences
 
@@ -35,7 +37,7 @@ def hmm_sample_minibatches(observations, valid_lens, batch_size, rng_key):
     -------
     * array(num_batches, batch_size, max_len)
         Minibatches
-    '''
+    """
     num_train = len(observations)
     perm = permutation(rng_key, num_train)
 
@@ -50,7 +52,7 @@ def hmm_sample_minibatches(observations, valid_lens, batch_size, rng_key):
 
 @partial(jit, static_argnums=(1, 2, 3))
 def hmm_sample_n(params, sample_fn, n, max_len, rng_key):
-    '''
+    """
     Generates n observation sequences from the given Hidden Markov Model
 
     Parameters
@@ -75,7 +77,7 @@ def hmm_sample_n(params, sample_fn, n, max_len, rng_key):
     -------
     * array(n, max_len)
         Observation sequences
-    '''
+    """
 
     def sample_(params, n_samples, key):
         return sample_fn(params, n_samples, key)[1]
@@ -89,7 +91,7 @@ def hmm_sample_n(params, sample_fn, n, max_len, rng_key):
 
 @jit
 def pad_sequences(observations, valid_lens, pad_val=0):
-    '''
+    """
     Generates n observation sequences from the given Hidden Markov Model
 
     Parameters
@@ -108,7 +110,7 @@ def pad_sequences(observations, valid_lens, pad_val=0):
     -------
     * array(n, max_len)
         Ragged dataset
-    '''
+    """
 
     def pad(seq, len):
         idx = jnp.arange(1, seq.shape[0] + 1)
@@ -139,23 +141,25 @@ def hmm_plot_graphviz(trans_mat, obs_mat, states=[], observations=[]):
 
     n_states, n_obs = obs_mat.shape
 
-    dot = Digraph(comment='HMM')
+    dot = Digraph(comment="HMM")
     if not states:
-        states = [f'State {i + 1}' for i in range(n_states)]
+        states = [f"State {i + 1}" for i in range(n_states)]
     if not observations:
-        observations = [f'Obs {i + 1}' for i in range(n_obs)]
+        observations = [f"Obs {i + 1}" for i in range(n_obs)]
 
     # Creates hidden state nodes
     for i, name in enumerate(states):
-        table = [f'<TR><TD>{observations[j]}</TD><TD>{"%.2f" % prob}</TD></TR>' for j, prob in
-                 enumerate(obs_mat[i])]
-        label = f'''<<TABLE><TR><TD BGCOLOR="lightblue" COLSPAN="2">{name}</TD></TR>{''.join(table)}</TABLE>>'''
-        dot.node(f's{i}', label=label)
+        table = [
+            f'<TR><TD>{observations[j]}</TD><TD>{"%.2f" % prob}</TD></TR>'
+            for j, prob in enumerate(obs_mat[i])
+        ]
+        label = f"""<<TABLE><TR><TD BGCOLOR="lightblue" COLSPAN="2">{name}</TD></TR>{''.join(table)}</TABLE>>"""
+        dot.node(f"s{i}", label=label)
 
     # Writes transition probabilities
     for i in range(n_states):
         for j in range(n_states):
-            dot.edge(f's{i}', f's{j}', label=str('%.2f' % trans_mat[i, j]))
-    dot.attr(rankdir='LR')
+            dot.edge(f"s{i}", f"s{j}", label=str("%.2f" % trans_mat[i, j]))
+    dot.attr(rankdir="LR")
     # dot.render(file_name, view=True)
     return dot

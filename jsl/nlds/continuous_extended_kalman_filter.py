@@ -1,13 +1,16 @@
+from math import ceil
+
 import jax
 import jax.numpy as jnp
 from jax.ops import index_update
-from math import ceil
+
 
 class ContinuousExtendedKalmanFilter:
     """
     Extended Kalman Filter for a nonlinear continuous time
     dynamical system with observations in discrete time.
     """
+
     def __init__(self, fz, fx, Q, R):
         self.fz = fz
         self.fx = fx
@@ -17,12 +20,12 @@ class ContinuousExtendedKalmanFilter:
         self.R = R
         self.state_size, _ = Q.shape
         self.obs_size, _ = R.shape
-        
+
     @staticmethod
     def _rk2(x0, f, nsteps, dt):
         """
         class-independent second-order Runge-Kutta method
-        
+
         Parameters
         ----------
         x0: array(state_size, )
@@ -34,7 +37,7 @@ class ContinuousExtendedKalmanFilter:
             Total number of steps to integrate
         dt: float
             integration step size
-        
+
         Returns
         -------
         array(nsteps, state_size)
@@ -43,7 +46,7 @@ class ContinuousExtendedKalmanFilter:
         input_dim, *_ = x0.shape
         simulation = jnp.zeros((nsteps, input_dim))
         simulation = index_update(simulation, 0, x0)
-        
+
         xt = x0.copy()
         for t in range(1, nsteps):
             k1 = f(xt)
@@ -51,7 +54,7 @@ class ContinuousExtendedKalmanFilter:
             xt = xt + dt * (k1 + k2) / 2
             simulation = index_update(simulation, t, xt)
         return simulation
-    
+
     def sample(self, key, x0, T, nsamples, dt=0.01, noisy=False):
         """
         Run the Extended Kalman Filter algorithm. First, we integrate
@@ -89,21 +92,28 @@ class ContinuousExtendedKalmanFilter:
         nsteps += correction * jump_size
 
         key_state, key_obs = jax.random.split(key)
-        state_noise = jax.random.multivariate_normal(key_state, jnp.zeros(self.state_size), self.Q, (nsteps,))
-        obs_noise = jax.random.multivariate_normal(key_obs, jnp.zeros(self.obs_size), self.R, (nsteps,)) 
+        state_noise = jax.random.multivariate_normal(
+            key_state, jnp.zeros(self.state_size), self.Q, (nsteps,)
+        )
+        obs_noise = jax.random.multivariate_normal(
+            key_obs, jnp.zeros(self.obs_size), self.R, (nsteps,)
+        )
         simulation = self._rk2(x0, self.fz, nsteps, dt)
-        
+
         if noisy:
             simulation = simulation + jnp.sqrt(dt) * state_noise
-        
+
         sample_state = simulation[::jump_size]
-        sample_obs = jnp.apply_along_axis(self.fx, 1, sample_state) + obs_noise[:len(sample_state)]
-        
+        sample_obs = (
+            jnp.apply_along_axis(self.fx, 1, sample_state)
+            + obs_noise[: len(sample_state)]
+        )
+
         return sample_state, sample_obs, jump_size
-    
+
     def _Vt_dot(self, V, G):
         return G @ V @ G.T + self.Q
-    
+
     def estimate(self, sample_state, sample_obs, jump_size, dt):
         """
         Run the Extended Kalman Filter algorithm over a set of observed samples.
@@ -143,7 +153,7 @@ class ContinuousExtendedKalmanFilter:
                 k1 = self._Vt_dot(Vt, Gt)
                 k2 = self._Vt_dot(Vt + dt * k1, Gt)
                 Vt = Vt + dt * (k1 + k2) / 2
-            
+
             mu_t_cond = mu_t
             Vt_cond = Vt
             Ht = self.Dfx(mu_t_cond)
@@ -154,5 +164,5 @@ class ContinuousExtendedKalmanFilter:
 
             mu_hist = index_update(mu_hist, t, mu_t)
             V_hist = index_update(V_hist, t, Vt)
-        
+
         return mu_hist, V_hist

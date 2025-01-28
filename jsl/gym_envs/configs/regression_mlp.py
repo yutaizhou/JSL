@@ -1,16 +1,15 @@
-# Default configuration where the problem is regression and the agent is Kalman Filter 
+# Default configuration where the problem is regression and the agent is Kalman Filter
 import ml_collections
 
 # Local imports
-from configs.utils import PriorKnowledge
-
 # Local imports
 from configs.utils import AgentConfig, EnvironmentConfig, PriorKnowledge
+
 
 def get_config():
     """Get the default hyperparameter configuration."""
     config = ml_collections.ConfigDict()
-    
+
     config.nsteps = 50
     config.ntrials = 1
 
@@ -28,12 +27,14 @@ def get_config():
     config.env = EnvironmentConfig(problem_type, model, prior_knowledge)
 
     model = "KalmanFilter"
-    
-    init_kwargs = dict(mu0=jnp.zeros(input_dim),
-                        Sigma0=jnp.eye(input_dim) * 10.,
-                        F=jnp.eye(input_dim),
-                        Q=0,
-                        R=1)
+
+    init_kwargs = dict(
+        mu0=jnp.zeros(input_dim),
+        Sigma0=jnp.eye(input_dim) * 10.0,
+        F=jnp.eye(input_dim),
+        Q=0,
+        R=1,
+    )
 
     config.agent = AgentConfig(model, init_kwargs=init_kwargs)
 

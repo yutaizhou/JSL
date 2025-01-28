@@ -1,32 +1,40 @@
 import jax.numpy as jnp
+import matplotlib.pyplot as plt
 from jax import random
 from jax.nn import sigmoid
-
-import matplotlib.pyplot as plt
 
 from jsl.demos import logreg_biclusters as demo
 from jsl.sent.agents.eekf import EEKF
 from jsl.sent.environments.sequential_data_env import SequentialDataEnvironment
 from jsl.sent.run import train
 
-
 figures, data = demo.main()
 
-def fz(x): return x
-def fx(w, x): return sigmoid(w[None, :] @ x)
-def Rt(w, x): return (sigmoid(w @ x) * (1 - sigmoid(w @ x)))[None, None]
 
-def make_biclusters_data_environment(train_batch_size,
-                                    test_batch_size):
-    
-    env = SequentialDataEnvironment(data["Phi"],
-                            data["y"].reshape((-1, 1)),
-                            data["Phi"],
-                            data["y"].reshape((-1, 1)),
-                            train_batch_size,
-                            test_batch_size,
-                            classification=True)
+def fz(x):
+    return x
+
+
+def fx(w, x):
+    return sigmoid(w[None, :] @ x)
+
+
+def Rt(w, x):
+    return (sigmoid(w @ x) * (1 - sigmoid(w @ x)))[None, None]
+
+
+def make_biclusters_data_environment(train_batch_size, test_batch_size):
+    env = SequentialDataEnvironment(
+        data["Phi"],
+        data["y"].reshape((-1, 1)),
+        data["Phi"],
+        data["y"].reshape((-1, 1)),
+        train_batch_size,
+        test_batch_size,
+        classification=True,
+    )
     return env
+
 
 def main():
     X = data["X"]
@@ -47,15 +55,12 @@ def main():
     _, nx, ny = Xspace.shape
     Phispace = jnp.concatenate([jnp.ones((1, nx, ny)), Xspace])
 
-
     train_batch_size = 1
     test_batch_size = 1
-    env = make_biclusters_data_environment(train_batch_size,
-                                            test_batch_size)
-                                            
+    env = make_biclusters_data_environment(train_batch_size, test_batch_size)
 
     ### EEKF Approximation
-    M =  Phi.shape[-1]
+    M = Phi.shape[-1]
     mu_t = jnp.zeros(M)
     Pt = jnp.eye(M) * 0.0
     P0 = jnp.eye(M) * 2.0
@@ -65,11 +70,10 @@ def main():
 
     w_eekf_hist = params["mean"]
     P_eekf_hist = params["cov"]
-    
+
     w_eekf = params["mean"][-1]
     P_eekf = params["cov"][-1]
 
- 
     ### *** Ploting surface predictive distribution ***
     colors = ["black" if el else "white" for el in y]
     dict_figures = {}
@@ -88,7 +92,7 @@ def main():
 
     ### Plot EEKF and Laplace training history
     P_eekf_hist_diag = jnp.diagonal(P_eekf_hist, axis1=1, axis2=2)
-    #P_laplace_diag = jnp.sqrt(jnp.diagonal(SN))
+    # P_laplace_diag = jnp.sqrt(jnp.diagonal(SN))
     lcolors = ["black", "tab:blue", "tab:red"]
     elements = w_eekf_hist.T, P_eekf_hist_diag.T, w_laplace, lcolors
     timesteps = jnp.arange(n_datapoints) + 1
@@ -96,7 +100,13 @@ def main():
     for k, (wk, Pk, wk_laplace, c) in enumerate(zip(*elements)):
         fig_weight_k, ax = plt.subplots()
         ax.errorbar(timesteps, wk, jnp.sqrt(Pk), c=c, label=f"$w_{k}$ online (EEKF)")
-        ax.axhline(y=wk_laplace, c=c, linestyle="dotted", label=f"$w_{k}$ batch (Laplace)", linewidth=3)
+        ax.axhline(
+            y=wk_laplace,
+            c=c,
+            linestyle="dotted",
+            label=f"$w_{k}$ batch (Laplace)",
+            linewidth=3,
+        )
 
         ax.set_xlim(1, n_datapoints)
         ax.legend(framealpha=0.7, loc="upper right")
@@ -106,13 +116,14 @@ def main():
         dict_figures[f"logistic_regression_hist_ekf_w{k}"] = fig_weight_k
 
     print("EEKF weights")
-    print(w_eekf, end="\n"*2)
-    
+    print(w_eekf, end="\n" * 2)
+
     return dict_figures
 
 
 if __name__ == "__main__":
     from jsl.demos.plot_utils import savefig
+
     figs = main()
     savefig(figs)
     plt.show()

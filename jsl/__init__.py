@@ -1,1 +1,1 @@
-from . import hmm, lds, nlds, demos, gym_envs, foo_vb, sent
+from . import demos, foo_vb, gym_envs, hmm, lds, nlds, sent

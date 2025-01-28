@@ -5,19 +5,24 @@
 #     * !pip install git+https://github.com/blackjax-devs/blackjax.git
 
 
+from functools import partial
+
+import blackjax.rmh as rmh
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-import blackjax.rmh as rmh
 from jax import random
-from functools import partial
 from jax.scipy.optimize import minimize
-from sklearn.datasets import make_biclusters
 from jax.scipy.stats import norm
+from sklearn.datasets import make_biclusters
 
 
-def sigmoid(x): return jnp.exp(x) / (1 + jnp.exp(x))
-def log_sigmoid(z): return z - jnp.log1p(jnp.exp(z))
+def sigmoid(x):
+    return jnp.exp(x) / (1 + jnp.exp(x))
+
+
+def log_sigmoid(z):
+    return z - jnp.log1p(jnp.exp(z))
 
 
 def plot_posterior_predictive(ax, X, Xspace, Zspace, title, colors, cmap="RdBu_r"):
@@ -48,12 +53,13 @@ def E_base(w, Phi, y, alpha):
     return log_prior_term + log_likelihood_term.sum()
 
 
-def mcmc_logistic_posterior_sample(key, Phi, y, alpha=1.0, init_noise=1.0,
-                                   n_samples=5_000, burnin=300, sigma_mcmc=0.8):
+def mcmc_logistic_posterior_sample(
+    key, Phi, y, alpha=1.0, init_noise=1.0, n_samples=5_000, burnin=300, sigma_mcmc=0.8
+):
     """
     Sample from the posterior distribution of the weights
     of a 2d binary logistic regression model p(y=1|x,w) = sigmoid(w'x),
-    using the random walk Metropolis-Hastings algorithm. 
+    using the random walk Metropolis-Hastings algorithm.
     """
     _, ndims = Phi.shape
     key, key_init = random.split(key)
@@ -67,6 +73,7 @@ def mcmc_logistic_posterior_sample(key, Phi, y, alpha=1.0, init_noise=1.0,
     states = inference_loop(key_init, mcmc_kernel, initial_state, n_samples)
     chains = states.position[burnin:, :]
     return chains
+
 
 def laplace_posterior(key, Phi, y, alpha=1.0, init_noise=1.0):
     N, M = Phi.shape
@@ -82,9 +89,9 @@ def main():
     ## Data generating process
     n_datapoints = 50
     m = 2
-    X, rows, _ = make_biclusters((n_datapoints, m), 2,
-                                    noise=0.6, random_state=3141,
-                                    minval=-4, maxval=4)
+    X, rows, _ = make_biclusters(
+        (n_datapoints, m), 2, noise=0.6, random_state=3141, minval=-4, maxval=4
+    )
     # whether datapoints belong to class 1
     y = rows[0] * 1.0
 
@@ -134,27 +141,39 @@ def main():
     plot_posterior_predictive(ax, X, Xspace, Z_mcmc, title, colors)
     dict_figures["logistic_regression_surface_mcmc"] = fig_mcmc
 
-
     # *** Plotting posterior marginals of weights ***
     for i in range(M):
         fig_weights_marginals, ax = plt.subplots()
         mean_laplace, std_laplace = w_laplace[i], jnp.sqrt(SN[i, i])
         mean_mcmc, std_mcmc = chains[:, i].mean(), chains[:, i].std()
 
-        x = jnp.linspace(mean_laplace - 4 * std_laplace, mean_laplace + 4 * std_laplace, 500)
-        ax.plot(x, norm.pdf(x, mean_laplace, std_laplace), label="posterior (Laplace)", linestyle="dotted")
-        ax.plot(x, norm.pdf(x, mean_mcmc, std_mcmc), label="posterior (MCMC)", linestyle="dashed")
+        x = jnp.linspace(
+            mean_laplace - 4 * std_laplace, mean_laplace + 4 * std_laplace, 500
+        )
+        ax.plot(
+            x,
+            norm.pdf(x, mean_laplace, std_laplace),
+            label="posterior (Laplace)",
+            linestyle="dotted",
+        )
+        ax.plot(
+            x,
+            norm.pdf(x, mean_mcmc, std_mcmc),
+            label="posterior (MCMC)",
+            linestyle="dashed",
+        )
         ax.legend()
         ax.set_title(f"Posterior marginals of weights ({i})")
-        dict_figures[f"logistic_regression_weights_marginals_w{i}"] = fig_weights_marginals
-
+        dict_figures[f"logistic_regression_weights_marginals_w{i}"] = (
+            fig_weights_marginals
+        )
 
     print("MCMC weights")
     w_mcmc = chains.mean(axis=0)
-    print(w_mcmc, end="\n"*2)
+    print(w_mcmc, end="\n" * 2)
 
     print("Laplace weights")
-    print(w_laplace, end="\n"*2)
+    print(w_laplace, end="\n" * 2)
 
     dict_data = {
         "X": X,
@@ -163,7 +182,7 @@ def main():
         "Phi": Phi,
         "Phispace": Phispace,
         "w_laplace": w_laplace,
-        "cov_laplace": SN
+        "cov_laplace": SN,
     }
 
     return dict_figures, dict_data
@@ -171,6 +190,7 @@ def main():
 
 if __name__ == "__main__":
     from jsl.demos.plot_utils import savefig
+
     figs, data = main()
     savefig(figs)
     plt.show()

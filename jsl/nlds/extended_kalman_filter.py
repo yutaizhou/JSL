@@ -1,9 +1,11 @@
+from functools import partial
+
 import jax
 import jax.numpy as jnp
 from jax import jacrev
 from jax.lax import scan
+
 from .base import NLDS
-from functools import partial
 
 
 class ExtendedKalmanFilter(NLDS):
@@ -49,7 +51,7 @@ class ExtendedKalmanFilter(NLDS):
             Small number to prevent singular matrix
         return_params: list
             Fix elements to carry
-        
+
         Returns
         -------
         * tuple
@@ -74,11 +76,15 @@ class ExtendedKalmanFilter(NLDS):
         Kt = Vt_cond @ Ht.T @ jnp.linalg.inv(Mt)
         mu_t = mu_t_cond + Kt @ (obs - obs_hat)
         Vt = (I - Kt @ Ht) @ Vt_cond @ (I - Kt @ Ht).T + Kt @ Rt @ Kt.T
-        
-        elements = {"mean": mu_t, "cov": Vt}
-        return (mu_t, Vt, t + 1), {key: val for key, val in elements.items() if key in return_params}
 
-    def filter(self, init_state, sample_obs, observations=None, Vinit=None, return_params=None):
+        elements = {"mean": mu_t, "cov": Vt}
+        return (mu_t, Vt, t + 1), {
+            key: val for key, val in elements.items() if key in return_params
+        }
+
+    def filter(
+        self, init_state, sample_obs, observations=None, Vinit=None, return_params=None
+    ):
         """
         Run the Extended Kalman Filter algorithm over a set of observed samples.
 
@@ -107,7 +113,9 @@ class ExtendedKalmanFilter(NLDS):
 
         t = 0
         state = (init_state, Vt, t)
-        observations = (observations,) if type(observations) is not tuple else observations
+        observations = (
+            (observations,) if type(observations) is not tuple else observations
+        )
         xs = (sample_obs, observations)
 
         return_params = [] if return_params is None else return_params

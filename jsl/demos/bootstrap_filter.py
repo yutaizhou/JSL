@@ -2,11 +2,12 @@
 # nonlinear discrete system
 
 import jax
-from jsl.nlds.base import NLDS
-from jsl.nlds.bootstrap_filter import BootstrapFilter
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 from jax import random
+
+from jsl.nlds.base import NLDS
+from jsl.nlds.bootstrap_filter import BootstrapFilter
 
 
 def plot_samples(sample_state, sample_obs, ax=None):
@@ -29,11 +30,15 @@ def plot_inference(sample_obs, mean_hist):
     plt.axis("equal")
     return fig
 
+
 def main():
     key = random.PRNGKey(314)
 
-    def fz(x, dt): return x + dt * jnp.array([jnp.sin(x[1]), jnp.cos(x[0])])
-    def fx(x): return x
+    def fz(x, dt):
+        return x + dt * jnp.array([jnp.sin(x[1]), jnp.cos(x[0])])
+
+    def fx(x):
+        return x
 
     dt = 0.4
     nsteps = 100
@@ -62,8 +67,10 @@ def main():
 
     return dict_figures
 
+
 if __name__ == "__main__":
     from jsl.demos.plot_utils import savefig
+
     plt.rcParams["axes.spines.right"] = False
     plt.rcParams["axes.spines.top"] = False
     dict_figures = main()

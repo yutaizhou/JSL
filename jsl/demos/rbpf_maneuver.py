@@ -3,21 +3,24 @@
 
 # !pip install matplotlib==3.4.2
 
-import jax
-import numpy as np
-import jax.numpy as jnp
-import seaborn as sns
-import matplotlib.pyplot as plt
-import jsl.lds.mixture_kalman_filter as kflib
-from jax import random
 from functools import partial
-from sklearn.preprocessing import OneHotEncoder
+
+import jax
+import jax.numpy as jnp
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+from jax import random
 from jax.scipy.special import logit
+from sklearn.preprocessing import OneHotEncoder
+
+import jsl.lds.mixture_kalman_filter as kflib
 from jsl.demos.plot_utils import kdeg, style3d
 
 
-
-def plot_3d_belief_state(mu_hist, dim, ax, skip=3, npoints=2000, azimuth=-30, elevation=30, h=0.5):
+def plot_3d_belief_state(
+    mu_hist, dim, ax, skip=3, npoints=2000, azimuth=-30, elevation=30, h=0.5
+):
     nsteps = len(mu_hist)
     xmin, xmax = mu_hist[..., dim].min(), mu_hist[..., dim].max()
     xrange = jnp.linspace(xmin, xmax, npoints).reshape(-1, 1)
@@ -31,38 +34,28 @@ def plot_3d_belief_state(mu_hist, dim, ax, skip=3, npoints=2000, azimuth=-30, el
     style3d(ax, 1.8, 1.2, 0.7, 0.8)
     ax.view_init(elevation, azimuth)
     ax.set_xlabel(r"$t$", fontsize=13)
-    ax.set_ylabel(r"$x_{"f"d={dim}"",t}$", fontsize=13)
+    ax.set_ylabel(r"$x_{" f"d={dim}" ",t}$", fontsize=13)
     ax.set_zlabel(r"$p(x_{d, t} \vert y_{1:t})$", fontsize=13)
 
 
 def main():
     TT = 0.1
-    A = jnp.array([[1, TT, 0, 0],
-                [0, 1, 0, 0],
-                [0, 0, 1, TT],
-                [0, 0, 0, 1]])
-
+    A = jnp.array([[1, TT, 0, 0], [0, 1, 0, 0], [0, 0, 1, TT], [0, 0, 0, 1]])
 
     B1 = jnp.array([0, 0, 0, 0])
     B2 = jnp.array([-1.225, -0.35, 1.225, 0.35])
-    B3 = jnp.array([1.225, 0.35,  -1.225,  -0.35])
+    B3 = jnp.array([1.225, 0.35, -1.225, -0.35])
     B = jnp.stack([B1, B2, B3], axis=0)
 
     Q = 0.2 * jnp.eye(4)
     R = 10 * jnp.diag(jnp.array([2, 1, 2, 1]))
     C = jnp.eye(4)
 
-    transition_matrix = jnp.array([
-        [0.9, 0.05, 0.05],
-        [0.05, 0.9, 0.05],
-        [0.05, 0.05, 0.9]
-    ])
+    transition_matrix = jnp.array(
+        [[0.9, 0.05, 0.05], [0.05, 0.9, 0.05], [0.05, 0.05, 0.9]]
+    )
 
-    transition_matrix = jnp.array([
-        [0.8, 0.1, 0.1],
-        [0.1, 0.8, 0.1],
-        [0.1, 0.1, 0.8]
-    ])
+    transition_matrix = jnp.array([[0.8, 0.1, 0.1], [0.1, 0.8, 0.1], [0.1, 0.1, 0.8]])
 
     params = kflib.RBPFParamsDiscrete(A, B, C, Q, R, transition_matrix)
 
@@ -85,15 +78,18 @@ def main():
     # Initial filter configuration
     mu_0 = 0.01 * random.normal(key_mean_init, (nparticles, 4))
     mu_0 = 0.01 * random.normal(key_mean_init, (nparticles, 4))
-    Sigma_0 = jnp.zeros((nparticles, 4,4))
+    Sigma_0 = jnp.zeros((nparticles, 4, 4))
     s0 = random.categorical(key_state, logit(p_init), shape=(nparticles,))
     weights_0 = jnp.ones(nparticles) / nparticles
     init_config = (key_next, mu_0, Sigma_0, weights_0, s0)
 
-    rbpf_optimal_part = partial(kflib.rbpf_optimal, params=params, nparticles=nparticles)
-    _, (mu_hist, Sigma_hist, weights_hist, s_hist, Ptk) = jax.lax.scan(rbpf_optimal_part, init_config, obs_hist)
+    rbpf_optimal_part = partial(
+        kflib.rbpf_optimal, params=params, nparticles=nparticles
+    )
+    _, (mu_hist, Sigma_hist, weights_hist, s_hist, Ptk) = jax.lax.scan(
+        rbpf_optimal_part, init_config, obs_hist
+    )
     mu_hist_post_mean = jnp.einsum("ts,tsm->tm", weights_hist, mu_hist)
-
 
     dict_figures = {}
     # Plot target dataset
@@ -110,7 +106,9 @@ def main():
     rbpf_mse = ((mu_hist_post_mean - state_hist)[:, [0, 2]] ** 2).mean(axis=0).sum()
     latent_hist_est = Ptk.mean(axis=1).argmax(axis=1)
     color_states_est = [color_dict[state] for state in np.array(latent_hist_est)]
-    ax.scatter(*mu_hist_post_mean[:, [0, 2]].T, c="none", edgecolors=color_states_est, s=10)
+    ax.scatter(
+        *mu_hist_post_mean[:, [0, 2]].T, c="none", edgecolors=color_states_est, s=10
+    )
     ax.set_title(f"RBPF MSE: {rbpf_mse:.2f}")
     dict_figures["rbpf-maneuver-trace"] = fig
 
@@ -145,12 +143,13 @@ def main():
         plot_3d_belief_state(mu_hist, dim, ax, h=1.1)
         # pml.savefig(f"rbpf-maneuver-belief-states-dim{dim}.pdf", pad_inches=0, bbox_inches="tight")
         dict_figures[f"rbpf-maneuver-belief-states-dim{dim}.pdf"] = fig
-    
+
     return dict_figures
 
 
 if __name__ == "__main__":
     from jsl.demos.plot_utils import savefig
+
     plt.rcParams["axes.spines.right"] = False
     plt.rcParams["axes.spines.top"] = False
     dict_figures = main()

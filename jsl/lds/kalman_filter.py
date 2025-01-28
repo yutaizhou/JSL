@@ -2,12 +2,11 @@
 # Author:  Gerardo Durán-Martín (@gerdm), Aleyna Kara(@karalleyna)
 
 import jax
-from jax import vmap
-from jax.random import multivariate_normal, split
-from jax.lax import Precision
 import jax.numpy as jnp
+from jax import vmap
+from jax.lax import Precision, scan
 from jax.numpy.linalg import inv
-from jax.lax import scan
+from jax.random import multivariate_normal, split
 from tensorflow_probability.substrates import jax as tfp
 
 tfd = tfp.distributions
@@ -87,11 +86,17 @@ class KalmanFilter:
 
         # Generate all future noise terms
         zeros_state = jnp.zeros(self.state_size)
-        observation_size = self.timesteps if isinstance(self.R, int) else self.R.shape[0]
+        observation_size = (
+            self.timesteps if isinstance(self.R, int) else self.R.shape[0]
+        )
         zeros_obs = jnp.zeros(observation_size)
 
-        system_noise = multivariate_normal(key_system_noise, zeros_state, self.Q, (self.timesteps, n_samples))
-        obs_noise = multivariate_normal(key_obs_noise, zeros_obs, self.R, (self.timesteps, n_samples))
+        system_noise = multivariate_normal(
+            key_system_noise, zeros_state, self.Q, (self.timesteps, n_samples)
+        )
+        obs_noise = multivariate_normal(
+            key_obs_noise, zeros_obs, self.R, (self.timesteps, n_samples)
+        )
 
         obs_t = jnp.einsum("ij,sj->si", self.C(0), state_t) + obs_noise[0]
 
@@ -102,7 +107,9 @@ class KalmanFilter:
             return state_new, (state_new, obs_new)
 
         timesteps = jnp.arange(1, self.timesteps)
-        _, (state_hist, obs_hist) = jax.lax.scan(__sample, state_t, (system_noise[1:], obs_noise[1:], timesteps))
+        _, (state_hist, obs_hist) = jax.lax.scan(
+            __sample, state_t, (system_noise[1:], obs_noise[1:], timesteps)
+        )
         state_hist = jnp.swapaxes(jnp.vstack([state_t[None, ...], state_hist]), 0, 1)
         obs_hist = jnp.swapaxes(jnp.vstack([obs_t[None, ...], obs_hist]), 0, 1)
 
@@ -159,8 +166,9 @@ class KalmanFilter:
         * array(timesteps, state_size, state_size)
             Filtered conditional covariances Sigmat|t-1
         """
-        _, (mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist) = jax.lax.scan(self.kalman_step,
-                                                                               (self.mu0, self.Sigma0, 0), x_hist)
+        _, (mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist) = jax.lax.scan(
+            self.kalman_step, (self.mu0, self.Sigma0, 0), x_hist
+        )
         return mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist
 
     def __kalman_smoother(self, mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist):
@@ -196,10 +204,20 @@ class KalmanFilter:
         Sigmat_giv_T = Sigma_hist[-1, :]
 
         elements = (
-            mu_hist[-2::-1], Sigma_hist[-2::-1, ...], mu_cond_hist[1:][::-1, ...], Sigma_cond_hist[1:][::-1, ...])
-        _, (mu_hist_smooth, Sigma_hist_smooth) = jax.lax.scan(self.__smoother_step, (mut_giv_T, Sigmat_giv_T), elements)
-        mu_hist_smooth = jnp.concatenate([mu_hist_smooth[::-1, ...], mut_giv_T[None, ...]], axis=0)
-        Sigma_hist_smooth = jnp.concatenate([Sigma_hist_smooth[::-1, ...], Sigmat_giv_T[None, ...]], axis=0)
+            mu_hist[-2::-1],
+            Sigma_hist[-2::-1, ...],
+            mu_cond_hist[1:][::-1, ...],
+            Sigma_cond_hist[1:][::-1, ...],
+        )
+        _, (mu_hist_smooth, Sigma_hist_smooth) = jax.lax.scan(
+            self.__smoother_step, (mut_giv_T, Sigmat_giv_T), elements
+        )
+        mu_hist_smooth = jnp.concatenate(
+            [mu_hist_smooth[::-1, ...], mut_giv_T[None, ...]], axis=0
+        )
+        Sigma_hist_smooth = jnp.concatenate(
+            [Sigma_hist_smooth[::-1, ...], Sigmat_giv_T[None, ...]], axis=0
+        )
 
         return mu_hist_smooth, Sigma_hist_smooth
 
@@ -234,8 +252,12 @@ class KalmanFilter:
         kalman_map = jax.vmap(self.__kalman_filter, 0)
         mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist = kalman_map(x_hist)
         if has_one_sim:
-            mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist = mu_hist[0, ...], Sigma_hist[0, ...], mu_cond_hist[
-                0, ...], Sigma_cond_hist[0, ...]
+            mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist = (
+                mu_hist[0, ...],
+                Sigma_hist[0, ...],
+                mu_cond_hist[0, ...],
+                Sigma_cond_hist[0, ...],
+            )
         return mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist
 
     def smooth(self, mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist):
@@ -268,13 +290,22 @@ class KalmanFilter:
         """
         has_one_sim = False
         if mu_hist.ndim == 2:
-            mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist = mu_hist[None, ...], Sigma_hist[None, ...], \
-                                                                 mu_cond_hist[None, ...], Sigma_cond_hist[None, ...]
+            mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist = (
+                mu_hist[None, ...],
+                Sigma_hist[None, ...],
+                mu_cond_hist[None, ...],
+                Sigma_cond_hist[None, ...],
+            )
             has_one_sim = True
         smoother_map = jax.vmap(self.__kalman_smoother, 0)
-        mu_hist_smooth, Sigma_hist_smooth = smoother_map(mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist)
+        mu_hist_smooth, Sigma_hist_smooth = smoother_map(
+            mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist
+        )
         if has_one_sim:
-            mu_hist_smooth, Sigma_hist_smooth = mu_hist_smooth[0, ...], Sigma_hist_smooth[0, ...]
+            mu_hist_smooth, Sigma_hist_smooth = (
+                mu_hist_smooth[0, ...],
+                Sigma_hist_smooth[0, ...],
+            )
         return mu_hist_smooth, Sigma_hist_smooth
 
 
@@ -331,8 +362,14 @@ class KalmanFilterNoiseEstimation:
         covariates, response = obs
 
         mu_cond = jnp.matmul(self.A, mu, precision=Precision.HIGHEST)
-        Sigmat_cond = jnp.matmul(jnp.matmul(self.A, Sigma, precision=Precision.HIGHEST), self.A,
-                                 precision=Precision.HIGHEST) + self.Q
+        Sigmat_cond = (
+            jnp.matmul(
+                jnp.matmul(self.A, Sigma, precision=Precision.HIGHEST),
+                self.A,
+                precision=Precision.HIGHEST,
+            )
+            + self.Q
+        )
 
         e_k = response - covariates.T @ mu_cond
         s_k = covariates.T @ Sigmat_cond @ covariates + 1
@@ -365,8 +402,9 @@ class KalmanFilterNoiseEstimation:
         * array(timesteps, state_size, state_size)
             Filtered conditional covariances Sigmat|t-1
         """
-        _, (mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist) = scan(self.kalman_step,
-                                                                       (self.mu0, self.Sigma0, 0), x_hist)
+        _, (mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist) = scan(
+            self.kalman_step, (self.mu0, self.Sigma0, 0), x_hist
+        )
         return mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist
 
     def filter(self, x_hist):
@@ -398,6 +436,10 @@ class KalmanFilterNoiseEstimation:
         kalman_map = vmap(self.__kalman_filter, 0)
         mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist = kalman_map(x_hist)
         if has_one_sim:
-            mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist = mu_hist[0, ...], Sigma_hist[0, ...], mu_cond_hist[
-                0, ...], Sigma_cond_hist[0, ...]
+            mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist = (
+                mu_hist[0, ...],
+                Sigma_hist[0, ...],
+                mu_cond_hist[0, ...],
+                Sigma_cond_hist[0, ...],
+            )
         return mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist

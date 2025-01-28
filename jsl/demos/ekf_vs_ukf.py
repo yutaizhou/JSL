@@ -1,13 +1,14 @@
 # Compare extended Kalman filter with unscented kalman filter on a nonlinear 2d tracking problem
 
-from jax import random
-import matplotlib.pyplot as plt
 import jax.numpy as jnp
+import matplotlib.pyplot as plt
+from jax import random
 
 from jsl.demos import plot_utils
 from jsl.nlds.base import NLDS
 from jsl.nlds.extended_kalman_filter import ExtendedKalmanFilter
 from jsl.nlds.unscented_kalman_filter import UnscentedKalmanFilter
+
 
 def check_symmetric(a, rtol=1.1):
     return jnp.allclose(a, a.T, rtol=rtol)
@@ -30,16 +31,23 @@ def plot_inference(sample_obs, mean_hist, Sigma_hist):
     ax.plot(*mean_hist.T, c="tab:orange", label="filtered")
     ax.scatter(*mean_hist[0], c="black", zorder=3)
     plt.legend()
-    collection = [(mut, Vt) for mut, Vt in zip(mean_hist[::4], Sigma_hist[::4])
-                  if Vt[0, 0] > 0 and Vt[1, 1] > 0 and abs(Vt[1, 0] - Vt[0, 1]) < 7e-4]
+    collection = [
+        (mut, Vt)
+        for mut, Vt in zip(mean_hist[::4], Sigma_hist[::4])
+        if Vt[0, 0] > 0 and Vt[1, 1] > 0 and abs(Vt[1, 0] - Vt[0, 1]) < 7e-4
+    ]
     for mut, Vt in collection:
         plot_utils.plot_ellipse(Vt, mut, ax, plot_center=False, alpha=0.9, zorder=3)
     plt.axis("equal")
     return fig, ax
 
+
 def main():
-    def fz(x, dt): return x + dt * jnp.array([jnp.sin(x[1]), jnp.cos(x[0])])
-    def fx(x, *args): return x
+    def fz(x, dt):
+        return x + dt * jnp.array([jnp.sin(x[1]), jnp.cos(x[0])])
+
+    def fx(x, *args):
+        return x
 
     dt = 0.4
     nsteps = 100
@@ -84,6 +92,7 @@ def main():
 
 if __name__ == "__main__":
     from jsl.demos.plot_utils import savefig
+
     dict_figures = main()
     savefig(dict_figures)
     plt.show()

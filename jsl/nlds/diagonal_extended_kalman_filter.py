@@ -1,5 +1,6 @@
 import jax.numpy as jnp
 from jax import jacrev
+
 from .base import NLDS
 
 
@@ -67,7 +68,9 @@ class DiagonalExtendedKalmanFilter(NLDS):
 
         t = 0
         state = (init_state, Vinit, t)
-        observations = (observations,) if type(observations) is not tuple else observations
+        observations = (
+            (observations,) if type(observations) is not tuple else observations
+        )
         xs = (sample_obs, observations)
         (mu_t, Vt, _), mu_t_hist = jax.lax.scan(self.filter_step, state, xs)
 

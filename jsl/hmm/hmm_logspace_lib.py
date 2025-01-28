@@ -1,22 +1,21 @@
-'''
+"""
 Generalizes hmm_discrete_lib so it can handle any kind of observation distribution (eg Gaussian, Poisson, GMM, product of
 Bernoullis). It is based on https://github.com/probml/pyprobml/blob/master/scripts/hmm_lib.py
 and operates within the log space.
 Author : Aleyna Kara(@karalleyna)
-'''
-
-from jax.random import split
-import jax.numpy as jnp
-from jax import jit, lax, vmap
-from jax.nn import logsumexp, log_softmax, one_hot
+"""
 
 from functools import partial
 
-import superimport
-import flax
 import distrax
+import flax
+import jax.numpy as jnp
+import superimport
+from jax import jit, lax, vmap
+from jax.nn import log_softmax, logsumexp, one_hot
+from jax.random import split
 
-'''
+"""
 Hidden Markov Model class in which trans_dist and init_dist are categorical-like
 distribution from distrax, and obs_dist is any instance of distrax.Distribution.
 
@@ -26,7 +25,7 @@ is pytree. So, they cannot work on a vanilla dataclass. To see more:
 
 Since the flax.dataclass is registered pytree beforehand, it facilitates to use
 jit, vmap and optimizers on the hidden markov model.
-'''
+"""
 
 
 @flax.struct.dataclass
@@ -37,7 +36,7 @@ class HMM:
 
 
 def logdotexp(u, v, axis=-1):
-    '''
+    """
     Calculates jnp.log(jnp.exp(u) * jnp.exp(v)) in a stable way.
     Parameters
     ----------
@@ -48,7 +47,7 @@ def logdotexp(u, v, axis=-1):
     -------
     * array
         Logarithm of the Hadamard product of u and v
-    '''
+    """
     max_u = jnp.max(u, axis=axis, keepdims=True)
     max_v = jnp.max(v, axis=axis, keepdims=True)
 
@@ -62,7 +61,7 @@ def logdotexp(u, v, axis=-1):
 
 
 def log_normalize(u, axis=-1):
-    '''
+    """
     Normalizes the values within the axis in a way that the exponential of each values within the axis
     sums up to 1.
     Parameters
@@ -75,14 +74,14 @@ def log_normalize(u, axis=-1):
         The Log of normalized version of the given matrix
     * array(seq_len, n_hidden) :
         The values of the normalizer
-    '''
+    """
     c = logsumexp(u, axis=axis)
     return jnp.where(u == -jnp.inf, -jnp.inf, u - c), c
 
 
 @partial(jit, static_argnums=(1,))
 def hmm_sample_log(params, seq_len, rng_key):
-    '''
+    """
     Samples an observation of given length according to the defined
     hidden markov model and gives the sequence of the hidden states
     as well as the observation.
@@ -100,8 +99,12 @@ def hmm_sample_log(params, seq_len, rng_key):
         Hidden state sequence
     * array(seq_len,) :
         Observation sequence
-    '''
-    trans_dist, obs_dist, init_dist = params.trans_dist, params.obs_dist, params.init_dist
+    """
+    trans_dist, obs_dist, init_dist = (
+        params.trans_dist,
+        params.obs_dist,
+        params.init_dist,
+    )
 
     rng_key, rng_init = split(rng_key)
     initial_state = init_dist.sample(seed=rng_init)
@@ -126,7 +129,7 @@ def hmm_sample_log(params, seq_len, rng_key):
 
 @jit
 def hmm_forwards_log(params, obs_seq, length=None):
-    '''
+    """
     Calculates a belief state
     Parameters
     ----------
@@ -140,21 +143,27 @@ def hmm_forwards_log(params, obs_seq, length=None):
         The loglikelihood giving log(p(x|model))
     * array(seq_len, n_hidden) :
         Log of alpha values
-    '''
+    """
     seq_len = len(obs_seq)
 
     if length is None:
         length = seq_len
 
-    trans_dist, obs_dist, init_dist = params.trans_dist, params.obs_dist, params.init_dist
+    trans_dist, obs_dist, init_dist = (
+        params.trans_dist,
+        params.obs_dist,
+        params.init_dist,
+    )
     n_states = obs_dist.batch_shape[0]
 
     def scan_fn(carry, t):
         (alpha_prev, log_ll_prev) = carry
-        alpha_n = jnp.where(t < length,
-                            obs_dist.log_prob(obs_seq[t]) + logsumexp(
-                                logdotexp(alpha_prev[:, None], trans_dist.logits), axis=0),
-                            -jnp.inf + jnp.zeros_like(alpha_prev))
+        alpha_n = jnp.where(
+            t < length,
+            obs_dist.log_prob(obs_seq[t])
+            + logsumexp(logdotexp(alpha_prev[:, None], trans_dist.logits), axis=0),
+            -jnp.inf + jnp.zeros_like(alpha_prev),
+        )
 
         alpha_n, cn = log_normalize(alpha_n)
         carry = (alpha_n, cn + log_ll_prev)
@@ -177,7 +186,7 @@ def hmm_forwards_log(params, obs_seq, length=None):
 
 @jit
 def hmm_backwards_log(params, obs_seq, length=None):
-    '''
+    """
     Computes the backwards probabilities
     Parameters
     ----------
@@ -191,22 +200,32 @@ def hmm_backwards_log(params, obs_seq, length=None):
     -------
     * array(seq_len, n_states)
        Log of beta values
-    '''
+    """
     seq_len = len(obs_seq)
 
     if length is None:
         length = seq_len
 
-    trans_dist, obs_dist, init_dist = params.trans_dist, params.obs_dist, params.init_dist
+    trans_dist, obs_dist, init_dist = (
+        params.trans_dist,
+        params.obs_dist,
+        params.init_dist,
+    )
     n_states = trans_dist.batch_shape[0]
 
     beta_t = jnp.zeros((n_states,))
 
     def scan_fn(beta_prev, t):
-        beta_t = jnp.where(t > length,
-                           -jnp.inf + jnp.zeros_like(beta_prev),
-                           log_normalize(logsumexp(beta_prev + obs_dist.log_prob(obs_seq[-t + 1]) + trans_dist.logits,
-                                                   axis=1))[0])
+        beta_t = jnp.where(
+            t > length,
+            -jnp.inf + jnp.zeros_like(beta_prev),
+            log_normalize(
+                logsumexp(
+                    beta_prev + obs_dist.log_prob(obs_seq[-t + 1]) + trans_dist.logits,
+                    axis=1,
+                )
+            )[0],
+        )
         return beta_t, beta_t
 
     ts = jnp.arange(2, seq_len + 1)
@@ -219,7 +238,7 @@ def hmm_backwards_log(params, obs_seq, length=None):
 
 @jit
 def hmm_forwards_backwards_log(params, obs_seq, length=None):
-    '''
+    """
     Computes, for each time step, the marginal conditional probability that the Hidden Markov Model was
     in each possible state given the observations that were made at each time step, i.e.
     P(z[i] | x[0], ..., x[num_steps - 1]) for all i from 0 to num_steps - 1
@@ -239,16 +258,16 @@ def hmm_forwards_backwards_log(params, obs_seq, length=None):
         The log of marginal conditional probability
     * float
         The loglikelihood giving log(p(x|model))
-    '''
+    """
     seq_len = len(obs_seq)
 
     if length is None:
         length = seq_len
 
     def gamma_t(t):
-        gamma_t = jnp.where(t < length,
-                            alpha[t] + beta[t - length],
-                            jnp.zeros((n_states,)))
+        gamma_t = jnp.where(
+            t < length, alpha[t] + beta[t - length], jnp.zeros((n_states,))
+        )
         return gamma_t
 
     ll, alpha = hmm_forwards_log(params, obs_seq, length)
@@ -265,7 +284,7 @@ def hmm_forwards_backwards_log(params, obs_seq, length=None):
 
 @jit
 def hmm_viterbi_log(params, obs_seq, length=None):
-    '''
+    """
     Computes, for each time step, the marginal conditional probability that the Hidden Markov Model was
     in each possible state given the observations that were made at each time step, i.e.
     P(z[i] | x[0], ..., x[num_steps - 1]) for all i from 0 to num_steps - 1
@@ -287,13 +306,17 @@ def hmm_viterbi_log(params, obs_seq, length=None):
         Marginal conditional probability
     * float
         The loglikelihood giving log(p(x|model))
-    '''
+    """
     seq_len = len(obs_seq)
 
     if length is None:
         length = seq_len
 
-    trans_dist, obs_dist, init_dist = params.trans_dist, params.obs_dist, params.init_dist
+    trans_dist, obs_dist, init_dist = (
+        params.trans_dist,
+        params.obs_dist,
+        params.init_dist,
+    )
 
     trans_log_probs = log_softmax(trans_dist.logits)
     init_log_probs = log_softmax(init_dist.logits)
@@ -308,12 +331,18 @@ def hmm_viterbi_log(params, obs_seq, length=None):
     def viterbi_forward(prev_logp, t):
         obs_logp = obs_dist.log_prob(obs_seq[t])
 
-        logp = jnp.where(t <= length,
-                         prev_logp[..., None] + trans_log_probs + obs_logp[..., None, :],
-                         -jnp.inf + jnp.zeros_like(trans_log_probs))
+        logp = jnp.where(
+            t <= length,
+            prev_logp[..., None] + trans_log_probs + obs_logp[..., None, :],
+            -jnp.inf + jnp.zeros_like(trans_log_probs),
+        )
 
-        max_logp_given_successor = jnp.where(t <= length, jnp.max(logp, axis=-2), prev_logp)
-        most_likely_given_successor = jnp.where(t <= length, jnp.argmax(logp, axis=-2), -1)
+        max_logp_given_successor = jnp.where(
+            t <= length, jnp.max(logp, axis=-2), prev_logp
+        )
+        most_likely_given_successor = jnp.where(
+            t <= length, jnp.argmax(logp, axis=-2), -1
+        )
 
         return max_logp_given_successor, most_likely_given_successor
 
@@ -321,16 +350,25 @@ def hmm_viterbi_log(params, obs_seq, length=None):
     final_log_prob, most_likely_sources = lax.scan(viterbi_forward, first_log_prob, ts)
 
     most_likely_initial_given_successor = jnp.argmax(
-        trans_log_probs + first_log_prob, axis=-2)
+        trans_log_probs + first_log_prob, axis=-2
+    )
 
-    most_likely_sources = jnp.concatenate([
-        jnp.expand_dims(most_likely_initial_given_successor, axis=0),
-        most_likely_sources], axis=0)
+    most_likely_sources = jnp.concatenate(
+        [
+            jnp.expand_dims(most_likely_initial_given_successor, axis=0),
+            most_likely_sources,
+        ],
+        axis=0,
+    )
 
     def viterbi_backward(state, t):
-        state = jnp.where(t <= length,
-                          jnp.sum(most_likely_sources[t] * one_hot(state, n_states)).astype(jnp.int64),
-                          state)
+        state = jnp.where(
+            t <= length,
+            jnp.sum(most_likely_sources[t] * one_hot(state, n_states)).astype(
+                jnp.int64
+            ),
+            state,
+        )
         most_likely = jnp.where(t <= length, state, -1)
         return state, most_likely
 

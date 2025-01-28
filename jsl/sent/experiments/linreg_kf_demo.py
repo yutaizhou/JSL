@@ -2,10 +2,9 @@ import jax.numpy as jnp
 from matplotlib import pyplot as plt
 from numpy.linalg import inv
 
-from jsl.sent.run import train
 from jsl.sent.agents.kalman_filter import KalmanFilterReg
-
 from jsl.sent.environments.base import make_matlab_demo_environment
+from jsl.sent.run import train
 
 
 def posterior_lreg(X, y, R, mu0, Sigma0):
@@ -15,10 +14,11 @@ def posterior_lreg(X, y, R, mu0, Sigma0):
 
     return mn_bayes, Sn_bayes
 
+
 def main():
-    input_dim = 2 
+    input_dim = 2
     mu0 = jnp.zeros(input_dim)
-    Sigma0 = jnp.eye(input_dim) * 10.
+    Sigma0 = jnp.eye(input_dim) * 10.0
     F = jnp.eye(input_dim)
     Q, R = 0, 1
     print("1")
@@ -35,9 +35,9 @@ def main():
     # Offline estimation
     input_dim, num_train = 2, 21
 
-    (w0_post, w1_post), Sigma_post = posterior_lreg(jnp.squeeze(env.X_train),
-                                                    jnp.squeeze(env.y_train),
-                                                    R, mu0, Sigma0)
+    (w0_post, w1_post), Sigma_post = posterior_lreg(
+        jnp.squeeze(env.X_train), jnp.squeeze(env.y_train), R, mu0, Sigma0
+    )
 
     w0_std, w1_std = jnp.sqrt(Sigma_post[[0, 1], [0, 1]])
 
@@ -45,14 +45,26 @@ def main():
 
     timesteps = jnp.arange(num_train)
     fig, ax = plt.subplots()
-    ax.errorbar(timesteps, w0_hist, w0_err, fmt="-o", label="$w_0$", color="black", fillstyle="none")
+    ax.errorbar(
+        timesteps,
+        w0_hist,
+        w0_err,
+        fmt="-o",
+        label="$w_0$",
+        color="black",
+        fillstyle="none",
+    )
     ax.errorbar(timesteps, w1_hist, w1_err, fmt="-o", label="$w_1$", color="tab:red")
 
     ax.axhline(y=w0_post, c="black", label="$w_0$ batch")
     ax.axhline(y=w1_post, c="tab:red", linestyle="--", label="$w_1$ batch")
 
-    ax.fill_between(timesteps, w0_post - w0_std, w0_post + w0_std, color="black", alpha=0.4)
-    ax.fill_between(timesteps, w1_post - w1_std, w1_post + w1_std, color="tab:red", alpha=0.4)
+    ax.fill_between(
+        timesteps, w0_post - w0_std, w0_post + w0_std, color="black", alpha=0.4
+    )
+    ax.fill_between(
+        timesteps, w1_post - w1_std, w1_post + w1_std, color="tab:red", alpha=0.4
+    )
     plt.legend()
     ax.set_xlabel("time")
     ax.set_ylabel("weights")
@@ -61,6 +73,6 @@ def main():
     dict_figures["linreg_online_kalman"] = fig
     return dict_figures
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
     main()
-    

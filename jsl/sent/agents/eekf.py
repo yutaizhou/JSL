@@ -1,24 +1,24 @@
 # Kalman filter agent
-import jax.numpy as jnp
+from typing import Callable, List
 
 import chex
-from typing import  Callable, List
+import jax.numpy as jnp
 
 from jsl.nlds.extended_kalman_filter import ExtendedKalmanFilter
 from jsl.sent.agents.agent import Agent
 
+
 class EEKF(Agent):
-
-    def __init__(self,
-                fz: Callable,
-                fx: Callable,
-                Pt: chex.Array,
-                Rt: Callable,
-                mu: chex.Array,
-                P0:chex.Array,
-                return_params: List[str]=["mean", "cov"]):
-
-
+    def __init__(
+        self,
+        fz: Callable,
+        fx: Callable,
+        Pt: chex.Array,
+        Rt: Callable,
+        mu: chex.Array,
+        P0: chex.Array,
+        return_params: List[str] = ["mean", "cov"],
+    ):
         self.fz = fz
         self.fx = fx
         self.Pt = Pt
@@ -26,18 +26,18 @@ class EEKF(Agent):
         self.return_params = return_params
 
         self.prior_mean = mu
-        self.prior_cov  = P0
+        self.prior_cov = P0
 
         self.reset(None)
 
-    def update(self,
-              X: chex.Array,
-              y: chex.Array):
-        (self.mu, self.Sigma), params = self.eekf.filter(self.mu,
-                                                    y,
-                                                    observations=X,
-                                                    Vinit=self.prior_cov,
-                                                    return_params=self.return_params)
+    def update(self, X: chex.Array, y: chex.Array):
+        (self.mu, self.Sigma), params = self.eekf.filter(
+            self.mu,
+            y,
+            observations=X,
+            Vinit=self.prior_cov,
+            return_params=self.return_params,
+        )
         return params
 
     def predict(self, x: chex.Array):
@@ -48,15 +48,14 @@ class EEKF(Agent):
         self.mu = self.prior_mean
         self.Sigma = self.prior_cov
 
-
-    def update(self,
-              X: chex.Array,
-              y: chex.Array):
-        (self.mu, self.Sigma), params = self.eekf.filter(self.mu,
-                                                    y,
-                                                    observations=X,
-                                                    Vinit=self.prior_cov,
-                                                    return_params=self.return_params)
+    def update(self, X: chex.Array, y: chex.Array):
+        (self.mu, self.Sigma), params = self.eekf.filter(
+            self.mu,
+            y,
+            observations=X,
+            Vinit=self.prior_cov,
+            return_params=self.return_params,
+        )
         return params
 
     def predict(self, x: chex.Array):

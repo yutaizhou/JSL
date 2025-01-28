@@ -5,20 +5,24 @@
 #   * https://github.com/rlabbe/Kalman-and-Bayesian-Filters-in-Python/blob/master/11-Extended-Kalman-Filters.ipynb
 #   * Nonlinear Dynamics and Chaos - Steven Strogatz
 
-from jsl.demos import plot_utils
-import numpy as np
-import matplotlib.pyplot as plt 
 import jax.numpy as jnp
+import matplotlib.pyplot as plt
+import numpy as np
 from jax import random
+
+from jsl.demos import plot_utils
 from jsl.nlds.continuous_extended_kalman_filter import ContinuousExtendedKalmanFilter
+
 
 def fz(x):
     x, y = x
-    return  jnp.asarray([y, x - x ** 3])
+    return jnp.asarray([y, x - x**3])
+
 
 def fx(x):
     x, y = x
     return jnp.asarray([x, y])
+
 
 def main():
     dt = 0.01
@@ -66,8 +70,10 @@ def main():
 
     return dict_figures
 
+
 if __name__ == "__main__":
     from jsl.demos.plot_utils import savefig
+
     plt.rcParams["axes.spines.right"] = False
     plt.rcParams["axes.spines.top"] = False
     dict_figures = main()

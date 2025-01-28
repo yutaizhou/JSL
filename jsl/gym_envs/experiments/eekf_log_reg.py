@@ -1,14 +1,13 @@
 import jax.numpy as jnp
+import matplotlib.pyplot as plt
 from jax import random
 from jax.nn import sigmoid
 
-import matplotlib.pyplot as plt
-
+# Import data and baseline solution
+from jsl.demos import logreg_biclusters as demo
 from jsl.gym_envs.configs.classification_eekf_test import get_config
 from jsl.gym_envs.run import main as train
 
-# Import data and baseline solution
-from jsl.demos import logreg_biclusters as demo
 
 def main():
     figures, data = demo.main()
@@ -35,11 +34,10 @@ def main():
 
     w_eekf_hist = hist["mean"]
     P_eekf_hist = hist["cov"]
-    
+
     w_eekf = hist["mean"][-1]
     P_eekf = hist["mean"][-1]
 
- 
     ### *** Ploting surface predictive distribution ***
     colors = ["black" if el else "white" for el in y]
     dict_figures = {}
@@ -58,7 +56,7 @@ def main():
     plt.savefig("logistic_regression_surface_eekf.png")
     ### Plot EEKF and Laplace training history
     P_eekf_hist_diag = jnp.diagonal(P_eekf_hist, axis1=1, axis2=2)
-    #P_laplace_diag = jnp.sqrt(jnp.diagonal(SN))
+    # P_laplace_diag = jnp.sqrt(jnp.diagonal(SN))
     lcolors = ["black", "tab:blue", "tab:red"]
     elements = w_eekf_hist.T, P_eekf_hist_diag.T, w_laplace, lcolors
     timesteps = jnp.arange(n_datapoints) + 1
@@ -66,7 +64,13 @@ def main():
     for k, (wk, Pk, wk_laplace, c) in enumerate(zip(*elements)):
         fig_weight_k, ax = plt.subplots()
         ax.errorbar(timesteps, wk, jnp.sqrt(Pk), c=c, label=f"$w_{k}$ online (EEKF)")
-        ax.axhline(y=wk_laplace, c=c, linestyle="dotted", label=f"$w_{k}$ batch (Laplace)", linewidth=3)
+        ax.axhline(
+            y=wk_laplace,
+            c=c,
+            linestyle="dotted",
+            label=f"$w_{k}$ batch (Laplace)",
+            linewidth=3,
+        )
 
         ax.set_xlim(1, n_datapoints)
         ax.legend(framealpha=0.7, loc="upper right")
@@ -75,17 +79,16 @@ def main():
         plt.tight_layout()
         dict_figures[f"logistic_regression_hist_ekf_w{k}"] = fig_weight_k
         plt.savefig(f"logistic_regression_hist_ekf_w{k}.png")
-    
 
     print("EEKF weights")
-    print(w_eekf, end="\n"*2)
-    
+    print(w_eekf, end="\n" * 2)
+
     return dict_figures
 
 
 if __name__ == "__main__":
     from jsl.demos.plot_utils import savefig
+
     figs = main()
     savefig(figs)
     plt.show()
-

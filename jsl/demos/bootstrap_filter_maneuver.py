@@ -4,21 +4,24 @@
 
 # !pip install matplotlib==3.4.2
 
-import superimport
+from functools import partial
 
 import jax
-import numpy as np
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-import jsl.lds.mixture_kalman_filter as kflib
+import numpy as np
+import superimport
 from jax import random
-from functools import partial
 from jax.scipy.special import logit
 from jax.scipy.stats import multivariate_normal
+
+import jsl.lds.mixture_kalman_filter as kflib
 from jsl.demos.plot_utils import kdeg, style3d
 
 
-def plot_3d_belief_state(mu_hist, dim, ax, skip=3, npoints=2000, azimuth=-30, elevation=30, h=0.5):
+def plot_3d_belief_state(
+    mu_hist, dim, ax, skip=3, npoints=2000, azimuth=-30, elevation=30, h=0.5
+):
     nsteps = len(mu_hist)
     xmin, xmax = mu_hist[..., dim].min(), mu_hist[..., dim].max()
     xrange = jnp.linspace(xmin, xmax, npoints).reshape(-1, 1)
@@ -32,62 +35,54 @@ def plot_3d_belief_state(mu_hist, dim, ax, skip=3, npoints=2000, azimuth=-30, el
     style3d(ax, 1.8, 1.2, 0.7, 0.8)
     ax.view_init(elevation, azimuth)
     ax.set_xlabel(r"$t$", fontsize=13)
-    ax.set_ylabel(r"$x_{"f"d={dim}"",t}$", fontsize=13)
+    ax.set_ylabel(r"$x_{" f"d={dim}" ",t}$", fontsize=13)
     ax.set_zlabel(r"$p(x_{d, t} \vert y_{1:t})$", fontsize=13)
-    
-    
+
+
 def bootstrap(state, y, A, B, C, Q, transition_matrix, nparticles):
     latent_t, state_t, key = state
     key_latent, key_state, key_reindex, key_next = random.split(key, 4)
-    
+
     # Discrete states
-    latent_t = random.categorical(key_latent, jnp.log(transition_matrix[latent_t]), shape=(nparticles,))
+    latent_t = random.categorical(
+        key_latent, jnp.log(transition_matrix[latent_t]), shape=(nparticles,)
+    )
     # Continous states
     state_mean = jnp.einsum("nm,sm->sn", A, state_t) + B[latent_t]
     state_t = random.multivariate_normal(key_state, mean=state_mean, cov=Q)
-    
+
     # Compute weights
     weights_t = multivariate_normal.pdf(y, mean=state_t, cov=C)
     indices_t = random.categorical(key_reindex, jnp.log(weights_t), shape=(nparticles,))
-    
+
     # Reindex and compute weights
     state_t = state_t[indices_t, ...]
     latent_t = latent_t[indices_t, ...]
     # weights_t = jnp.ones(nparticles) / nparticles
-    
+
     mu_t = state_t.mean(axis=0)
-    
+
     return (latent_t, state_t, key_next), (mu_t, latent_t, state_t)
 
 
 def main():
     TT = 0.1
-    A = jnp.array([[1, TT, 0, 0],
-                [0, 1, 0, 0],
-                [0, 0, 1, TT],
-                [0, 0, 0, 1]])
-
+    A = jnp.array([[1, TT, 0, 0], [0, 1, 0, 0], [0, 0, 1, TT], [0, 0, 0, 1]])
 
     B1 = jnp.array([0, 0, 0, 0])
     B2 = jnp.array([-1.225, -0.35, 1.225, 0.35])
-    B3 = jnp.array([1.225, 0.35,  -1.225,  -0.35])
+    B3 = jnp.array([1.225, 0.35, -1.225, -0.35])
     B = jnp.stack([B1, B2, B3], axis=0)
 
     Q = 0.2 * jnp.eye(4)
     R = 10 * jnp.diag(jnp.array([2, 1, 2, 1]))
     C = jnp.eye(4)
 
-    transition_matrix = jnp.array([
-        [0.9, 0.05, 0.05],
-        [0.05, 0.9, 0.05],
-        [0.05, 0.05, 0.9]
-    ])
+    transition_matrix = jnp.array(
+        [[0.9, 0.05, 0.05], [0.05, 0.9, 0.05], [0.05, 0.05, 0.9]]
+    )
 
-    transition_matrix = jnp.array([
-        [0.8, 0.1, 0.1],
-        [0.1, 0.8, 0.1],
-        [0.1, 0.1, 0.8]
-    ])
+    transition_matrix = jnp.array([[0.8, 0.1, 0.1], [0.1, 0.8, 0.1], [0.1, 0.1, 0.8]])
 
     # We sample from a Rao-Blackwell Kalman Filter
     params = kflib.RBPFParamsDiscrete(A, B, C, Q, R, transition_matrix)
@@ -103,7 +98,6 @@ def main():
     # Create target dataset
     _, (latent_hist, state_hist, obs_hist) = jax.lax.scan(draw_state_fixed, x0, keys)
 
-
     # ** Filtering process **
     nparticles = 5000
     key_base = random.PRNGKey(31)
@@ -114,8 +108,12 @@ def main():
     s0 = random.categorical(key_state, logit(p_init), shape=(nparticles,))
     init_state = (s0, mu_0, key_base)
 
-    def bootstrap_step(state, y): return bootstrap(state, y, A, B, C, Q, transition_matrix, nparticles)
-    _, (mu_t_hist, latent_hist, state_hist_particles) = jax.lax.scan(bootstrap_step, init_state, obs_hist)
+    def bootstrap_step(state, y):
+        return bootstrap(state, y, A, B, C, Q, transition_matrix, nparticles)
+
+    _, (mu_t_hist, latent_hist, state_hist_particles) = jax.lax.scan(
+        bootstrap_step, init_state, obs_hist
+    )
 
     estimated_track = mu_t_hist[:, [0, 2]]
     particles_track = state_hist_particles[..., [0, 2]]
@@ -135,14 +133,16 @@ def main():
         fig = plt.figure()
         ax = plt.axes(projection="3d")
         plot_3d_belief_state(particles_track, dim, ax, h=1.1, npoints=1000)
-        ax.autoscale(enable=False, axis='both')
+        ax.autoscale(enable=False, axis="both")
         # pml.savefig(f"bootstrap-filter-belief-states-dim{dim}.pdf", pad_inches=0, bbox_inches="tight")
         dict_figures[f"bootstrap-filter-belief-states-dim{dim}"] = fig
-    
+
     return dict_figures
+
 
 if __name__ == "__main__":
     from jsl.demos.plot_utils import savefig
+
     plt.rcParams["axes.spines.right"] = False
     plt.rcParams["axes.spines.top"] = False
     dict_figures = main()

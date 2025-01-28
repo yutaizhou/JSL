@@ -1,13 +1,15 @@
-# Implementation of the Kalman Filter for 
+# Implementation of the Kalman Filter for
 # continuous time series
 # Author: Gerardo Durán-Martín (@gerdm)
 
+from math import ceil
+
 import jax
 import jax.numpy as jnp
-from math import ceil
 from jax import random
-from jax.ops import index_update
 from jax.numpy.linalg import inv
+from jax.ops import index_update
+
 
 class ContinuousKalmanFilter:
     """
@@ -34,6 +36,7 @@ class ContinuousKalmanFilter:
         to zero, the initial state will be completely determined
         by mu0
     """
+
     def __init__(self, A, C, Q, R, mu0, Sigma0):
         self.A = A
         self.C = C
@@ -47,7 +50,7 @@ class ContinuousKalmanFilter:
     def _rk2(x0, M, nsteps, dt):
         """
         class-independent second-order Runge-Kutta method for linear systems
-        
+
         Parameters
         ----------
         x0: array(state_size, )
@@ -58,17 +61,20 @@ class ContinuousKalmanFilter:
             Total number of steps to integrate
         dt: float
             integration step size
-        
+
         Returns
         -------
         array(nsteps, state_size)
             Integration history
         """
-        def f(x): return M @ x
+
+        def f(x):
+            return M @ x
+
         input_dim, *_ = x0.shape
         simulation = jnp.zeros((nsteps, input_dim))
         simulation = index_update(simulation, 0, x0)
-        
+
         xt = x0.copy()
         for t in range(1, nsteps):
             k1 = f(xt)
@@ -113,16 +119,23 @@ class ContinuousKalmanFilter:
         nsteps += correction * jump_size
 
         key_state, key_obs = random.split(key)
-        state_noise = random.multivariate_normal(key_state, jnp.zeros(self.state_size), self.Q, (nsteps,))
-        obs_noise = random.multivariate_normal(key_obs, jnp.zeros(self.obs_size), self.R, (nsteps,)) 
+        state_noise = random.multivariate_normal(
+            key_state, jnp.zeros(self.state_size), self.Q, (nsteps,)
+        )
+        obs_noise = random.multivariate_normal(
+            key_obs, jnp.zeros(self.obs_size), self.R, (nsteps,)
+        )
         simulation = self._rk2(x0, self.A, nsteps, dt)
-        
+
         if noisy:
             simulation = simulation + state_noise
-        
+
         sample_state = simulation[::jump_size]
-        sample_obs = jnp.einsum("ij,si->si", self.C, sample_state) + obs_noise[:len(sample_state)]
-        
+        sample_obs = (
+            jnp.einsum("ij,si->si", self.C, sample_state)
+            + obs_noise[: len(sample_state)]
+        )
+
         return sample_state, sample_obs, jump_size
 
     def filter(self, x_hist, jump_size, dt):
@@ -130,11 +143,11 @@ class ContinuousKalmanFilter:
         Compute the online version of the Kalman-Filter, i.e,
         the one-step-ahead prediction for the hidden state or the
         time update step
-        
+
         Parameters
         ----------
         x_hist: array(timesteps, observation_size)
-            
+
         Returns
         -------
         * array(timesteps, state_size):
@@ -152,7 +165,7 @@ class ContinuousKalmanFilter:
         Sigma_hist = jnp.zeros((timesteps, self.state_size, self.state_size))
         Sigma_cond_hist = jnp.zeros((timesteps, self.state_size, self.state_size))
         mu_cond_hist = jnp.zeros((timesteps, self.state_size))
-        
+
         # Initial configuration
         K1 = self.Sigma0 @ self.C.T @ inv(self.C @ self.Sigma0 @ self.C.T + self.R)
         mu1 = self.mu0 + K1 @ (x_hist[0] - self.C @ self.mu0)
@@ -162,7 +175,7 @@ class ContinuousKalmanFilter:
         Sigma_hist = index_update(Sigma_hist, 0, Sigma1)
         mu_cond_hist = index_update(mu_cond_hist, 0, self.mu0)
         Sigma_cond_hist = index_update(Sigma_hist, 0, self.Sigma0)
-        
+
         Sigman = Sigma1.copy()
         mun = mu1.copy()
         for n in range(1, timesteps):
@@ -189,5 +202,5 @@ class ContinuousKalmanFilter:
             Sigma_hist = index_update(Sigma_hist, n, Sigman)
             mu_cond_hist = index_update(mu_cond_hist, n, mu_update)
             Sigma_cond_hist = index_update(Sigma_cond_hist, n, Sigman_cond)
-        
+
         return mu_hist, Sigma_hist, mu_cond_hist, Sigma_cond_hist

@@ -6,19 +6,22 @@
 # import superimport
 
 import logging
+
 import distrax
-import numpy as np
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+import numpy as np
 import tensorflow_probability as tfp
 from distrax import HMM
 from jax import vmap
 from jax.random import PRNGKey
 
-logging.getLogger('absl').setLevel(logging.CRITICAL)
+logging.getLogger("absl").setLevel(logging.CRITICAL)
 
 
-def plot_2dhmm(hmm, samples_obs, samples_state, colors, ax, xmin, xmax, ymin, ymax, step=1e-2):
+def plot_2dhmm(
+    hmm, samples_obs, samples_state, colors, ax, xmin, xmax, ymin, ymax, step=1e-2
+):
     """
     Plot the trajectory of a 2-dimensional HMM
     Parameters
@@ -51,7 +54,12 @@ def plot_2dhmm(hmm, samples_obs, samples_state, colors, ax, xmin, xmax, ymin, ym
 
     for k, color in enumerate(colors):
         ax.contour(*grid, z[:, :, k], levels=[1], colors=color, linewidths=3)
-        ax.text(*(obs_dist.mean()[k] + 0.13), f"$k$={k + 1}", fontsize=13, horizontalalignment="right")
+        ax.text(
+            *(obs_dist.mean()[k] + 0.13),
+            f"$k$={k + 1}",
+            fontsize=13,
+            horizontalalignment="right",
+        )
 
     ax.plot(*samples_obs.T, c="black", alpha=0.3, zorder=1)
     ax.scatter(*samples_obs.T, c=color_sample, s=30, zorder=2, alpha=0.8)
@@ -63,39 +71,26 @@ def main():
     initial_probs = jnp.array([0.3, 0.2, 0.5])
 
     # transition matrix
-    A = jnp.array([
-        [0.3, 0.4, 0.3],
-        [0.1, 0.6, 0.3],
-        [0.2, 0.3, 0.5]
-    ])
+    A = jnp.array([[0.3, 0.4, 0.3], [0.1, 0.6, 0.3], [0.2, 0.3, 0.5]])
 
-    S1 = jnp.array([
-        [1.1, 0],
-        [0, 0.3]
-    ])
+    S1 = jnp.array([[1.1, 0], [0, 0.3]])
 
-    S2 = jnp.array([
-        [0.3, -0.5],
-        [-0.5, 1.3]
-    ])
+    S2 = jnp.array([[0.3, -0.5], [-0.5, 1.3]])
 
-    S3 = jnp.array([
-        [0.8, 0.4],
-        [0.4, 0.5]
-    ])
+    S3 = jnp.array([[0.8, 0.4], [0.4, 0.5]])
 
     cov_collection = jnp.array([S1, S2, S3]) / 60
-    mu_collection = jnp.array([
-        [0.3, 0.3],
-        [0.8, 0.5],
-        [0.3, 0.8]
-    ])
+    mu_collection = jnp.array([[0.3, 0.3], [0.8, 0.5], [0.3, 0.8]])
 
-    hmm = HMM(trans_dist=distrax.Categorical(probs=A),
-              init_dist=distrax.Categorical(probs=initial_probs),
-              obs_dist=distrax.as_distribution(
-                  tfp.substrates.jax.distributions.MultivariateNormalFullCovariance(loc=mu_collection,
-                                                                                    covariance_matrix=cov_collection)))
+    hmm = HMM(
+        trans_dist=distrax.Categorical(probs=A),
+        init_dist=distrax.Categorical(probs=initial_probs),
+        obs_dist=distrax.as_distribution(
+            tfp.substrates.jax.distributions.MultivariateNormalFullCovariance(
+                loc=mu_collection, covariance_matrix=cov_collection
+            )
+        ),
+    )
     n_samples, seed = 50, 10
     samples_state, samples_obs = hmm.sample(seed=PRNGKey(seed), seq_len=n_samples)
 
@@ -105,11 +100,15 @@ def main():
 
     dict_figures = {}
     fig, ax = plt.subplots()
-    _, color_sample = plot_2dhmm(hmm, samples_obs, samples_state, colors, ax, xmin, xmax, ymin, ymax)
+    _, color_sample = plot_2dhmm(
+        hmm, samples_obs, samples_state, colors, ax, xmin, xmax, ymin, ymax
+    )
     dict_figures["hmm-lillypad-2d"] = fig
 
     fig, ax = plt.subplots()
-    ax.step(range(n_samples), samples_state, where="post", c="black", linewidth=1, alpha=0.3)
+    ax.step(
+        range(n_samples), samples_state, where="post", c="black", linewidth=1, alpha=0.3
+    )
     ax.scatter(range(n_samples), samples_state, c=color_sample, zorder=3)
     dict_figures["hmm-lillypad-step"] = fig
 

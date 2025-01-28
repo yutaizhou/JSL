@@ -2,15 +2,18 @@
 # Author : Aleyna Kara(@karalleyna)
 
 
-import jax
 import itertools
+
+import jax
 from jax import jit
 from jax.nn import softmax
-from jax.random import PRNGKey, split, normal
-from jsl.hmm.hmm_utils import hmm_sample_minibatches
+from jax.random import PRNGKey, normal, split
+
 from jsl.hmm.hmm_discrete_lib import HMMJax, hmm_loglikelihood_jax
+from jsl.hmm.hmm_utils import hmm_sample_minibatches
 
 opt_init, opt_update, get_params = None, None, None
+
 
 def init_random_params(sizes, rng_key):
     """
@@ -37,9 +40,11 @@ def init_random_params(sizes, rng_key):
     """
     num_hidden, num_obs = sizes
     rng_key, rng_a, rng_b, rng_pi = split(rng_key, 4)
-    return HMMJax(normal(rng_a, (num_hidden, num_hidden)),
-                  normal(rng_b, (num_hidden, num_obs)),
-                  normal(rng_pi, (num_hidden,)))
+    return HMMJax(
+        normal(rng_a, (num_hidden, num_hidden)),
+        normal(rng_b, (num_hidden, num_obs)),
+        normal(rng_pi, (num_hidden,)),
+    )
 
 
 @jit
@@ -64,9 +69,11 @@ def loss_fn(params, batch, lens):
     * float
         The mean negative loglikelihood of the minibatch
     """
-    params_soft = HMMJax(softmax(params.trans_mat, axis=1),
-                         softmax(params.obs_mat, axis=1),
-                         softmax(params.init_dist))
+    params_soft = HMMJax(
+        softmax(params.trans_mat, axis=1),
+        softmax(params.obs_mat, axis=1),
+        softmax(params.init_dist),
+    )
     return -hmm_loglikelihood_jax(params_soft, batch, lens).mean()
 
 
@@ -101,7 +108,16 @@ def update(i, opt_state, batch, lens):
     return opt_update(i, grads, opt_state), loss
 
 
-def fit(observations, lens, num_hidden, num_obs, batch_size, optimizer,rng_key=None, num_epochs=1):
+def fit(
+    observations,
+    lens,
+    num_hidden,
+    num_obs,
+    batch_size,
+    optimizer,
+    rng_key=None,
+    num_epochs=1,
+):
     """
     Trains the HMM model with the given number of hidden states and observations via any optimizer.
 
@@ -148,13 +164,14 @@ def fit(observations, lens, num_hidden, num_obs, batch_size, optimizer,rng_key=N
     itercount = itertools.count()
 
     def epoch_step(opt_state, key):
-
         def train_step(opt_state, params):
             batch, length = params
             opt_state, loss = update(next(itercount), opt_state, batch, length)
             return opt_state, loss
 
-        batches, valid_lens = hmm_sample_minibatches(observations, lens, batch_size, key)
+        batches, valid_lens = hmm_sample_minibatches(
+            observations, lens, batch_size, key
+        )
         params = (batches, valid_lens)
         opt_state, losses = jax.lax.scan(train_step, opt_state, params)
         return opt_state, losses.mean()
@@ -165,7 +182,9 @@ def fit(observations, lens, num_hidden, num_obs, batch_size, optimizer,rng_key=N
     losses = losses.flatten()
 
     params = get_params(opt_state)
-    params = HMMJax(softmax(params.trans_mat, axis=1),
-                    softmax(params.obs_mat, axis=1),
-                    softmax(params.init_dist))
+    params = HMMJax(
+        softmax(params.trans_mat, axis=1),
+        softmax(params.obs_mat, axis=1),
+        softmax(params.init_dist),
+    )
     return params, losses

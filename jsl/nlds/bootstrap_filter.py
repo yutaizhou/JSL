@@ -2,7 +2,9 @@ import jax
 import jax.numpy as jnp
 from jax import random
 from jax.scipy import stats
+
 from .base import NLDS
+
 
 class BootstrapFilter(NLDS):
     def __init__(self, fz, fx, Q, R):
@@ -13,7 +15,7 @@ class BootstrapFilter(NLDS):
         to-do: extend to general case
         """
         super().__init__(fz, fx, Q, R)
-    
+
     def __filter_step(self, state, obs_t):
         nsamples = self.nsamples
         indices = jnp.arange(nsamples)
@@ -28,8 +30,7 @@ class BootstrapFilter(NLDS):
         weights_t = stats.multivariate_normal.pdf(obs_t, xt_rvs, self.R(zt_rvs, obs_t))
 
         # 3. Resampling
-        pi = random.choice(key_reindex, indices,
-                           p=weights_t, shape=(nsamples,))
+        pi = random.choice(key_reindex, indices, p=weights_t, shape=(nsamples,))
         zt_rvs = zt_rvs[pi, ...]
         weights_t = jnp.ones(nsamples) / nsamples
 
@@ -39,24 +40,23 @@ class BootstrapFilter(NLDS):
 
         return (zt_rvs, key_next), mu_t
 
-
     def filter(self, key, init_state, sample_obs, nsamples=2000, Vinit=None):
-            """
-            init_state: array(state_size,)
-                Initial state estimate
-            sample_obs: array(nsamples, obs_size)
-                Samples of the observations
-            """
-            m, *_ = init_state.shape
-            nsteps = sample_obs.shape[0]
-            mu_hist = jnp.zeros((nsteps, m))
+        """
+        init_state: array(state_size,)
+            Initial state estimate
+        sample_obs: array(nsamples, obs_size)
+            Samples of the observations
+        """
+        m, *_ = init_state.shape
+        nsteps = sample_obs.shape[0]
+        mu_hist = jnp.zeros((nsteps, m))
 
-            key, key_init = random.split(key, 2)
-            V = self.Q(init_state) if Vinit is None else Vinit
-            zt_rvs = random.multivariate_normal(key_init, init_state, V, shape=(nsamples,))
-            
-            init_state = (zt_rvs, key)
-            self.nsamples = nsamples
-            _, mu_hist = jax.lax.scan(self.__filter_step, init_state, sample_obs)
+        key, key_init = random.split(key, 2)
+        V = self.Q(init_state) if Vinit is None else Vinit
+        zt_rvs = random.multivariate_normal(key_init, init_state, V, shape=(nsamples,))
 
-            return mu_hist
+        init_state = (zt_rvs, key)
+        self.nsamples = nsamples
+        _, mu_hist = jax.lax.scan(self.__filter_step, init_state, sample_obs)
+
+        return mu_hist
