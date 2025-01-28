@@ -7,8 +7,8 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 from jax import random
-from jax.ops import index_update
 
+# from jax.ops import index_update
 import jsl.nlds.bootstrap_filter as b_lib
 import jsl.nlds.extended_kalman_filter as ekf_lib
 import jsl.nlds.unscented_kalman_filter as ukf_lib
@@ -60,9 +60,10 @@ def main():
     replacement_values = random.uniform(
         key_values, (samples_map.sum(),), minval=-2, maxval=2
     )
-    sample_obs_noise = index_update(
-        sample_obs_noise.ravel(), samples_map, replacement_values
-    )
+    sample_obs_noise = sample_obs_noise.at[samples_map].set(replacement_values)
+    # sample_obs_noise = index_update(
+    #     sample_obs_noise.ravel(), samples_map, replacement_values
+    # )
     colors = ["tab:red" if samp else "tab:blue" for samp in samples_map]
 
     # *** Perform filtering ****
